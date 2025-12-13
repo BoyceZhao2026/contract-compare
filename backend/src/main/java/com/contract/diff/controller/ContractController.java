@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -33,6 +35,7 @@ public class ContractController {
     @Autowired
     private ComparisonRecordMapper recordMapper;
 
+    
     /**
      * 文件上传接口
      * @param file 上传的文件
@@ -80,7 +83,13 @@ public class ContractController {
             File file = fileService.getFile(path);
             Resource resource = new FileSystemResource(file);
 
+            // 从路径中提取文件名
+            String fileName = file.getName();
+
+            // 设置Content-Disposition，确保浏览器下载时使用正确的文件名
             return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                    .header(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .body(resource);
         } catch (SecurityException e) {
@@ -101,6 +110,10 @@ public class ContractController {
     @PostMapping("/record")
     public Result<Boolean> recordLog(@RequestBody ComparisonRecord record, HttpServletRequest request) {
         try {
+            log.info("接收到比对记录请求: originalFilename={}, targetFilename={}, originalFilePath={}, targetFilePath={}",
+                record.getOriginalFilename(), record.getTargetFilename(),
+                record.getOriginalFilePath(), record.getTargetFilePath());
+
             // 设置批次ID
             if (record.getBatchId() == null || record.getBatchId().isEmpty()) {
                 record.setBatchId(IdUtil.simpleUUID());
@@ -109,15 +122,14 @@ public class ContractController {
             // 设置操作时间
             record.setCreateTime(LocalDateTime.now());
 
-            // 设置客户端IP
-            String clientIp = getClientIpAddress(request);
-            record.setClientIp(clientIp);
 
             // 插入记录
+            log.info("准备插入比对记录: {}", record);
             int result = recordMapper.insert(record);
 
             if (result > 0) {
-                log.info("比对日志记录成功, batchId: {}", record.getBatchId());
+                log.info("比对日志记录成功, batchId: {}, originalFilename: {}, targetFilename: {}",
+                    record.getBatchId(), record.getOriginalFilename(), record.getTargetFilename());
                 return Result.success(true);
             } else {
                 log.error("比对日志记录失败");
@@ -129,25 +141,70 @@ public class ContractController {
         }
     }
 
+  
     /**
-     * 获取客户端IP地址
-     * @param request HTTP请求
-     * @return IP地址
+     * 获取比对历史记录
+     * @param page 页码
+     * @param size 每页大小
+     * @param filename 文件名称搜索
+     * @param startDate 开始日期
+     * @param endDate 结束日期
+     * @return 比对记录列表
      */
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty() && !"unknown".equalsIgnoreCase(xForwardedFor)) {
-            return xForwardedFor.split(",")[0].trim();
-        }
+    @GetMapping("/history")
+    public Result<Map<String, Object>> getHistory(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size,
+            @RequestParam(required = false) String filename,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate) {
+        try {
+            // 计算偏移量
+            int offset = (page - 1) * size;
 
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isEmpty() && !"unknown".equalsIgnoreCase(xRealIp)) {
-            return xRealIp;
-        }
+            // 查询比对记录列表，按批次ID分组，支持搜索
+            List<Map<String, Object>> history = recordMapper.selectHistoryGroupByBatch(offset, size, filename, startDate, endDate);
 
-        return request.getRemoteAddr();
+            // 查询总数，支持搜索
+            Long total = recordMapper.selectHistoryCount(filename, startDate, endDate);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("records", history);
+            result.put("total", total);
+            result.put("current", page);
+            result.put("size", size);
+            result.put("pages", (total + size - 1) / size);
+
+            return Result.success(result);
+        } catch (Exception e) {
+            log.error("获取比对历史记录失败", e);
+            return Result.error("获取历史记录失败: " + e.getMessage());
+        }
     }
 
+    /**
+     * 获取比对详情
+     * @param batchId 批次ID
+     * @return 比对详情
+     */
+    @GetMapping("/history/{batchId}")
+    public Result<List<ComparisonRecord>> getHistoryDetail(@PathVariable String batchId) {
+        try {
+            log.info("查询比对详情, batchId: {}", batchId);
+            List<ComparisonRecord> details = recordMapper.selectByBatchId(batchId);
+            log.info("查询到比对详情记录数: {}", details.size());
+            for (ComparisonRecord record : details) {
+                log.info("记录详情: batchId={}, originalFilename={}, targetFilename={}",
+                    record.getBatchId(), record.getOriginalFilename(), record.getTargetFilename());
+            }
+            return Result.success(details);
+        } catch (Exception e) {
+            log.error("获取比对详情失败, batchId: {}", batchId, e);
+            return Result.error("获取比对详情失败: " + e.getMessage());
+        }
+    }
+
+    
     /**
      * 健康检查接口
      * @return 服务状态

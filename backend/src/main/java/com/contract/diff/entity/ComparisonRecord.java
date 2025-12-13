@@ -29,7 +29,4 @@ public class ComparisonRecord {
 
     @TableField(value = "create_time", fill = FieldFill.INSERT)
     private LocalDateTime createTime;
-
-    @TableField("client_ip")
-    private String clientIp;
 }

@@ -8,6 +8,8 @@ import DiffMatchPatch from 'diff-match-patch';
 const props = defineProps<{
   leftPath: string;
   rightPath: string;
+  leftContent?: string | null;
+  rightContent?: string | null;
 }>();
 
 const leftHtml = ref('');
@@ -16,34 +18,246 @@ const isLoading = ref(false);
 const diffPositions = ref<Array<{elements: Element[], panel: string}>>([]);
 let currentDiffIndex = 0;
 
+// 获取文档文本内容
+const getDocumentText = async (filePath: string): Promise<string> => {
+  const isDoc = filePath.toLowerCase().endsWith('.doc')
+  const isDocx = filePath.toLowerCase().endsWith('.docx')
+
+  if (isDocx) {
+    // 使用mammoth.js解析.docx文件
+    const response = await axios.get(`/api/contract/file/stream?path=${filePath}`, {
+      responseType: 'arraybuffer'
+    });
+    return (await mammoth.extractRawText({
+      arrayBuffer: response.data
+    })).value;
+  } else if (isDoc) {
+    // 使用与FileContentSelector相同的.doc文件解析方法
+    const response = await axios.get(`/api/contract/file/stream?path=${filePath}`, {
+      responseType: 'arraybuffer'
+    });
+    return extractDocText(response.data);
+  } else {
+    throw new Error('不支持的文件格式');
+  }
+};
+
+// 提取.doc文件文本内容
+const extractDocText = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+  try {
+    const uint8Array = new Uint8Array(arrayBuffer)
+    const encoding = detectDocEncoding(uint8Array)
+    let extractedText = ''
+
+    if (encoding === 'utf-16le' || encoding === 'utf-16be') {
+      extractedText = extractUnicodeText(uint8Array, encoding)
+    } else if (encoding === 'ascii') {
+      extractedText = extractAsciiText(uint8Array)
+    } else {
+      extractedText = extractGeneralText(uint8Array)
+    }
+
+    if (!isReasonableText(extractedText)) {
+      extractedText = await fallbackDocExtraction(arrayBuffer)
+    }
+
+    return cleanExtractedText(extractedText)
+  } catch (error) {
+    console.error('解析.doc文件失败:', error)
+    return `DOC文件解析提示：无法提取文本内容，建议转换为.docx格式。`
+  }
+}
+
+// 检测.doc文件可能的编码
+const detectDocEncoding = (uint8Array: Uint8Array): string => {
+  if (uint8Array.length >= 2) {
+    if (uint8Array[0] === 0xFF && uint8Array[1] === 0xFE) {
+      return 'utf-16le'
+    }
+    if (uint8Array[0] === 0xFE && uint8Array[1] === 0xFF) {
+      return 'utf-16be'
+    }
+  }
+
+  let likelyUtf16 = 0
+  let asciiCount = 0
+
+  for (let i = 0; i < Math.min(1000, uint8Array.length); i += 2) {
+    if (uint8Array[i] === 0 && uint8Array[i + 1] > 0) {
+      likelyUtf16++
+    } else if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
+      asciiCount++
+    }
+  }
+
+  if (likelyUtf16 > asciiCount / 10) {
+    return 'utf-16le'
+  }
+
+  return 'ascii'
+}
+
+// 提取Unicode文本
+const extractUnicodeText = (uint8Array: Uint8Array, encoding: string): string => {
+  let text = ''
+  const isLe = encoding === 'utf-16le'
+
+  for (let i = 0; i < uint8Array.length - 1; i += 2) {
+    const charCode = isLe
+      ? uint8Array[i] | (uint8Array[i + 1] << 8)
+      : (uint8Array[i] << 8) | uint8Array[i + 1]
+
+    if (charCode === 0) break
+    if (charCode >= 32 && charCode <= 126) {
+      text += String.fromCharCode(charCode)
+    } else if (charCode >= 0x4E00 && charCode <= 0x9FFF) {
+      text += String.fromCharCode(charCode)
+    } else if (charCode === 10 || charCode === 13) {
+      text += '\n'
+    }
+  }
+
+  return text
+}
+
+// 提取ASCII文本
+const extractAsciiText = (uint8Array: Uint8Array): string => {
+  let text = ''
+
+  for (let i = 0; i < uint8Array.length; i++) {
+    const byte = uint8Array[i]
+
+    if ((byte >= 32 && byte <= 126) || (byte >= 128 && byte <= 255)) {
+      text += String.fromCharCode(byte)
+    } else if (byte === 10 || byte === 13) {
+      text += '\n'
+    } else if (byte === 9) {
+      text += ' '
+    }
+  }
+
+  return text
+}
+
+// 通用文本提取
+const extractGeneralText = (uint8Array: Uint8Array): string => {
+  let text = ''
+  let wordStart = false
+
+  for (let i = 0; i < uint8Array.length; i++) {
+    const byte = uint8Array[i]
+
+    if (byte >= 65 && byte <= 90 || byte >= 97 && byte <= 122) {
+      wordStart = true
+      text += String.fromCharCode(byte)
+    } else if (wordStart && byte >= 32 && byte <= 126) {
+      text += String.fromCharCode(byte)
+    } else if (byte === 10 || byte === 13) {
+      text += '\n'
+      wordStart = false
+    } else if (byte === 9 || byte === 32) {
+      text += ' '
+    } else {
+      wordStart = false
+    }
+  }
+
+  return text
+}
+
+// 检查提取的文本是否合理
+const isReasonableText = (text: string): boolean => {
+  if (!text || text.length < 10) return false
+
+  const printableChars = text.replace(/[\s\r\n]/g, '').length
+  const totalChars = text.length
+
+  if (printableChars / totalChars < 0.3) return false
+
+  const hasChinese = /[\u4e00-\u9fff]/.test(text)
+  const hasEnglish = /[a-zA-Z]{3,}/.test(text)
+
+  return hasChinese || hasEnglish
+}
+
+// 备用的.doc提取方法
+const fallbackDocExtraction = async (arrayBuffer: ArrayBuffer): Promise<string> => {
+  try {
+    const uint8Array = new Uint8Array(arrayBuffer)
+    let text = ''
+
+    for (let i = 0; i < uint8Array.length - 50; i++) {
+      if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
+        let segment = ''
+        let j = i
+
+        while (j < uint8Array.length && j < i + 1000) {
+          const byte = uint8Array[j]
+
+          if ((byte >= 32 && byte <= 126) || (byte >= 128 && byte <= 255)) {
+            segment += String.fromCharCode(byte)
+          } else if (byte === 10 || byte === 13) {
+            segment += '\n'
+          } else if (byte === 9) {
+            segment += ' '
+          } else {
+            break
+          }
+          j++
+        }
+
+        if (segment.length > 20 && /[a-zA-Z\u4e00-\u9fff]/.test(segment)) {
+          text += segment + '\n'
+          i = j
+        }
+      }
+    }
+
+    return text || '无法提取可读文本内容'
+  } catch (error) {
+    console.error('备用解析方法失败:', error)
+    return '文本提取失败'
+  }
+}
+
+// 清理提取的文本
+const cleanExtractedText = (text: string): string => {
+  return text
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .substring(0, 50000)
+}
+
 // 开始差异比对
 const startDiff = async () => {
   isLoading.value = true;
   try {
-    // 1. 并行下载两个文件的二进制流
-    const [resLeft, resRight] = await Promise.all([
-      axios.get(`/api/contract/file/stream?path=${props.leftPath}`, {
-        responseType: 'arraybuffer'
-      }),
-      axios.get(`/api/contract/file/stream?path=${props.rightPath}`, {
-        responseType: 'arraybuffer'
-      })
-    ]);
+    let textLeft: string;
+    let textRight: string;
 
-    // 2. 解析 Word 为纯文本
-    const textLeft = (await mammoth.extractRawText({
-      arrayBuffer: resLeft.data
-    })).value;
-    const textRight = (await mammoth.extractRawText({
-      arrayBuffer: resRight.data
-    })).value;
+    // 1. 获取文本内容
+    if (props.leftContent) {
+      // 使用提供的部分内容
+      textLeft = props.leftContent;
+    } else {
+      textLeft = await getDocumentText(props.leftPath);
+    }
 
-    // 3. 计算差异
+    if (props.rightContent) {
+      // 使用提供的部分内容
+      textRight = props.rightContent;
+    } else {
+      textRight = await getDocumentText(props.rightPath);
+    }
+
+    // 2. 计算差异
     const dmp = new (DiffMatchPatch as any)();
     const diffs = dmp.diff_main(textLeft, textRight);
     dmp.diff_cleanupSemantic(diffs);
 
-    // 4. 生成 HTML
+    // 3. 生成 HTML
     let lHtml = '';
     let rHtml = '';
 

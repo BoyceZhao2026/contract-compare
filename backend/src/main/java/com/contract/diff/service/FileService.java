@@ -28,8 +28,8 @@ public class FileService {
     public String storeFile(MultipartFile file) throws IOException {
         // 验证文件类型
         String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null || !originalFilename.toLowerCase().endsWith(".docx")) {
-            throw new IllegalArgumentException("仅支持.docx格式的文件");
+        if (originalFilename == null || (!originalFilename.toLowerCase().endsWith(".docx") && !originalFilename.toLowerCase().endsWith(".doc"))) {
+            throw new IllegalArgumentException("仅支持.docx或.doc格式的文件");
         }
 
         // 创建日期目录

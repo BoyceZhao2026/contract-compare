@@ -7,7 +7,17 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
+      // 首页直接显示历史列表
+      component: () => import('../views/HistoryView.vue'),
+    },
+    {
+      path: '/compare',
+      name: 'compare',
       component: HomeView,
+    },
+    {
+      path: '/history',
+      redirect: '/'
     },
     {
       path: '/about',
