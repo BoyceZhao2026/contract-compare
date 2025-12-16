@@ -293,7 +293,7 @@ const refreshData = () => {
 // 从列表重新比对
 const replayComparisonFromList = async (record: HistoryRecord) => {
   try {
-    const details = await axios.get(`/api/contract/history/${record.batch_id}`)
+    const details = await axios.get(`/contract/history/${record.batch_id}`)
     if (details.data.code === 200 && details.data.data.length > 0) {
       const firstRecord = details.data.data[0]
       router.push({
@@ -313,7 +313,7 @@ const replayComparisonFromList = async (record: HistoryRecord) => {
 const downloadFile = async (record: HistoryRecord, type: 'original' | 'target') => {
   try {
     // 获取该记录的详细信息以获取文件路径
-    const details = await axios.get(`/api/contract/history/${record.batch_id}`)
+    const details = await axios.get(`/contract/history/${record.batch_id}`)
 
     if (details.data.code !== 200 || details.data.data.length === 0) {
       ElMessage.error('获取文件信息失败')
@@ -339,7 +339,7 @@ const downloadFile = async (record: HistoryRecord, type: 'original' | 'target') 
     }
 
     // 下载文件
-    const response = await axios.get('/api/contract/file/stream', {
+    const response = await axios.get('/contract/file/stream', {
       params: { path: filePath },
       responseType: 'blob'
     })
@@ -398,7 +398,7 @@ const fetchHistory = async () => {
       params.endDate = searchForm.value.dateRange[1]
     }
 
-    const response = await axios.get('/api/contract/history', { params })
+    const response = await axios.get('/contract/history', { params })
 
     if (response.data.code === 200) {
       historyList.value = response.data.data.records
@@ -418,7 +418,7 @@ const fetchHistory = async () => {
 const fetchDetail = async (batchId: string) => {
   detailLoading.value = true
   try {
-    const response = await axios.get(`/api/contract/history/${batchId}`)
+    const response = await axios.get(`/contract/history/${batchId}`)
 
     if (response.data.code === 200) {
       detailRecords.value = response.data.data
@@ -522,15 +522,19 @@ const onComparisonCreated = () => {
 const replayComparison = () => {
   if (detailRecords.value.length > 0) {
     const firstRecord = detailRecords.value[0]
-    // 跳转到比对页面并传递文件路径
-    router.push({
-      name: 'compare',
-      query: {
-        original: firstRecord.originalFilePath,
-        target: firstRecord.targetFilePath
-      }
-    })
-    showDetailDialogVisible.value = false
+    if (firstRecord && firstRecord.originalFilePath && firstRecord.targetFilePath) {
+      // 跳转到比对页面并传递文件路径
+      router.push({
+        name: 'compare',
+        query: {
+          original: firstRecord.originalFilePath,
+          target: firstRecord.targetFilePath
+        }
+      })
+      showDetailDialogVisible.value = false
+    } else {
+      ElMessage.error('文件路径信息不完整')
+    }
   }
 }
 

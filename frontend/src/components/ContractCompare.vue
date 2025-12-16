@@ -54,7 +54,7 @@ const handleFileUpload = async (file: UploadFile, side: 'left' | 'right') => {
     const formData = new FormData();
     formData.append('file', file.raw!);
 
-    const response = await axios.post('/api/contract/upload', formData, {
+    const response = await axios.post('/contract/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -174,7 +174,7 @@ const recordComparison = async () => {
 
     console.log('准备记录比对日志:', record);
 
-    const response = await axios.post('/api/contract/record', record);
+    const response = await axios.post('/contract/record', record);
     if (response.data.code !== 200) {
       throw new Error(response.data.message || '记录保存失败');
     }
@@ -238,11 +238,11 @@ const loadFilesFromQuery = async () => {
     try {
       // 获取文件信息
       const [originalResponse, targetResponse] = await Promise.all([
-        axios.get('/api/contract/file/stream', {
+        axios.get('/contract/file/stream', {
           params: { path: original },
           responseType: 'blob'
         }),
-        axios.get('/api/contract/file/stream', {
+        axios.get('/contract/file/stream', {
           params: { path: target },
           responseType: 'blob'
         })

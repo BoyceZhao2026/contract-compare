@@ -362,7 +362,7 @@ const uploadFile = async (file: File): Promise<string> => {
   formData.append('file', file)
 
   try {
-    const response = await axios.post('/api/contract/upload', formData, {
+    const response = await axios.post('/contract/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data'
       }
@@ -390,7 +390,7 @@ const recordComparison = async (originalPath: string, targetPath: string) => {
       targetFilePath: targetPath
     }
 
-    const response = await axios.post('/api/contract/record', recordData)
+    const response = await axios.post('/contract/record', recordData)
 
     if (response.data.code !== 200) {
       throw new Error(response.data.message || '记录保存失败')

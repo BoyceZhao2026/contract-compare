@@ -25,7 +25,7 @@ const getDocumentText = async (filePath: string): Promise<string> => {
 
   if (isDocx) {
     // 使用mammoth.js解析.docx文件
-    const response = await axios.get(`/api/contract/file/stream?path=${filePath}`, {
+    const response = await axios.get(`/contract/file/stream?path=${filePath}`, {
       responseType: 'arraybuffer'
     });
     return (await mammoth.extractRawText({
@@ -33,7 +33,7 @@ const getDocumentText = async (filePath: string): Promise<string> => {
     })).value;
   } else if (isDoc) {
     // 使用与FileContentSelector相同的.doc文件解析方法
-    const response = await axios.get(`/api/contract/file/stream?path=${filePath}`, {
+    const response = await axios.get(`/contract/file/stream?path=${filePath}`, {
       responseType: 'arraybuffer'
     });
     return extractDocText(response.data);
@@ -82,10 +82,10 @@ const detectDocEncoding = (uint8Array: Uint8Array): string => {
   let likelyUtf16 = 0
   let asciiCount = 0
 
-  for (let i = 0; i < Math.min(1000, uint8Array.length); i += 2) {
-    if (uint8Array[i] === 0 && uint8Array[i + 1] > 0) {
+  for (let i = 0; i < Math.min(1000, uint8Array.length - 1); i += 2) {
+    if (uint8Array[i] === 0 && (uint8Array[i + 1] ?? 0) > 0) {
       likelyUtf16++
-    } else if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
+    } else if ((uint8Array[i] ?? 0) >= 32 && (uint8Array[i] ?? 0) <= 126) {
       asciiCount++
     }
   }
@@ -104,8 +104,8 @@ const extractUnicodeText = (uint8Array: Uint8Array, encoding: string): string =>
 
   for (let i = 0; i < uint8Array.length - 1; i += 2) {
     const charCode = isLe
-      ? uint8Array[i] | (uint8Array[i + 1] << 8)
-      : (uint8Array[i] << 8) | uint8Array[i + 1]
+      ? (uint8Array[i] ?? 0) | ((uint8Array[i + 1] ?? 0) << 8)
+      : ((uint8Array[i] ?? 0) << 8) | (uint8Array[i + 1] ?? 0)
 
     if (charCode === 0) break
     if (charCode >= 32 && charCode <= 126) {
@@ -127,7 +127,7 @@ const extractAsciiText = (uint8Array: Uint8Array): string => {
   for (let i = 0; i < uint8Array.length; i++) {
     const byte = uint8Array[i]
 
-    if ((byte >= 32 && byte <= 126) || (byte >= 128 && byte <= 255)) {
+    if (byte !== undefined && ((byte >= 32 && byte <= 126) || (byte >= 128 && byte <= 255))) {
       text += String.fromCharCode(byte)
     } else if (byte === 10 || byte === 13) {
       text += '\n'
@@ -147,10 +147,10 @@ const extractGeneralText = (uint8Array: Uint8Array): string => {
   for (let i = 0; i < uint8Array.length; i++) {
     const byte = uint8Array[i]
 
-    if (byte >= 65 && byte <= 90 || byte >= 97 && byte <= 122) {
+    if (byte !== undefined && ((byte >= 65 && byte <= 90) || (byte >= 97 && byte <= 122))) {
       wordStart = true
       text += String.fromCharCode(byte)
-    } else if (wordStart && byte >= 32 && byte <= 126) {
+    } else if (wordStart && byte !== undefined && byte >= 32 && byte <= 126) {
       text += String.fromCharCode(byte)
     } else if (byte === 10 || byte === 13) {
       text += '\n'
@@ -187,18 +187,19 @@ const fallbackDocExtraction = async (arrayBuffer: ArrayBuffer): Promise<string> 
     let text = ''
 
     for (let i = 0; i < uint8Array.length - 50; i++) {
-      if (uint8Array[i] >= 32 && uint8Array[i] <= 126) {
+      const byte = uint8Array[i]
+      if (byte !== undefined && byte >= 32 && byte <= 126) {
         let segment = ''
         let j = i
 
         while (j < uint8Array.length && j < i + 1000) {
-          const byte = uint8Array[j]
+          const currentByte = uint8Array[j]
 
-          if ((byte >= 32 && byte <= 126) || (byte >= 128 && byte <= 255)) {
-            segment += String.fromCharCode(byte)
-          } else if (byte === 10 || byte === 13) {
+          if (currentByte !== undefined && ((currentByte >= 32 && currentByte <= 126) || (currentByte >= 128 && currentByte <= 255))) {
+            segment += String.fromCharCode(currentByte)
+          } else if (currentByte === 10 || currentByte === 13) {
             segment += '\n'
-          } else if (byte === 9) {
+          } else if (currentByte === 9) {
             segment += ' '
           } else {
             break
@@ -378,14 +379,23 @@ const setupDiffPositions = () => {
     } else {
       // 检查是否与当前组相近
       const lastElementInGroup = currentGroup.elements[currentGroup.elements.length - 1];
-      const lastRect = lastElementInGroup.getBoundingClientRect();
-      const distance = Math.abs(diff.top - lastRect.top);
+      if (lastElementInGroup) {
+        const lastRect = lastElementInGroup.getBoundingClientRect();
+        const distance = Math.abs(diff.top - lastRect.top);
 
-      if (distance < 30) {
-        // 相近，加入当前组
-        currentGroup.elements.push(diff.element);
+        if (distance < 30) {
+          // 相近，加入当前组
+          currentGroup.elements.push(diff.element);
+        } else {
+          // 不相近，保存当前组并创建新组
+          groupedDiffs.push(currentGroup);
+          currentGroup = {
+            elements: [diff.element],
+            panel: diff.panel
+          };
+        }
       } else {
-        // 不相近，保存当前组并创建新组
+        // 如果最后一个元素不存在，创建新组
         groupedDiffs.push(currentGroup);
         currentGroup = {
           elements: [diff.element],
@@ -453,7 +463,7 @@ const scrollToDiff = (index: number) => {
 
   const diff = diffPositions.value[index];
 
-  if (!diff.elements || diff.elements.length === 0) return;
+  if (!diff || !diff.elements || diff.elements.length === 0) return;
 
   const leftPanel = document.getElementById('left-panel');
   const rightPanel = document.getElementById('right-panel');
@@ -467,6 +477,8 @@ const scrollToDiff = (index: number) => {
 
   // 获取第一个差异元素的实时位置
   const firstElement = diff.elements[0];
+  if (!firstElement) return;
+
   const rect = firstElement.getBoundingClientRect();
 
   // 获取面板的实时位置
