@@ -63,7 +63,6 @@
             v-for="record in historyList"
             :key="record.batch_id"
             class="history-item"
-            @click="showDetailDialog(record)"
           >
             <div class="item-header">
               <div class="item-time">
@@ -114,10 +113,7 @@
             </div>
 
             <div class="item-actions">
-              <el-button link type="primary" @click.stop="replayComparisonFromList(record)">
-                <el-icon><View /></el-icon>
-                重新比对
-              </el-button>
+
               <el-button link type="primary" @click.stop="downloadFile(record, 'original')">
                 <el-icon><Download /></el-icon>
                 下载原文件
@@ -150,69 +146,17 @@
         </div>
       </el-card>
     </div>
-
-    <!-- 详情对话框 -->
-    <el-dialog
-      v-model="showDetailDialogVisible"
-      :title="`比对详情 - ${formatDate(selectedRecord?.create_time || '')}`"
-      width="95%"
-      :close-on-click-modal="false"
-      @close="handleDetailClose"
-    >
-      <div v-loading="detailLoading">
-        <!-- 详情信息 -->
-        <div v-if="detailRecords.length > 0" class="detail-info">
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="原文件">
-              {{ detailRecords[0]?.originalFilename }}
-            </el-descriptions-item>
-            <el-descriptions-item label="目标文件">
-              {{ detailRecords[0]?.targetFilename }}
-            </el-descriptions-item>
-            <el-descriptions-item label="比对时间">
-              {{ formatDate(selectedRecord?.create_time || '') }}
-            </el-descriptions-item>
-            <el-descriptions-item label="文件数量">
-              {{ detailRecords.length }}
-            </el-descriptions-item>
-          </el-descriptions>
-        </div>
-
-        <!-- 比对结果展示 -->
-        <div v-if="showDiffResult" class="diff-result">
-          <div class="diff-controls">
-            <el-button @click="handleDetailClose">
-              <el-icon><Close /></el-icon>
-              关闭
-            </el-button>
-          </div>
-          <DiffViewer
-            :key="`diff-${currentOriginalPath}-${currentTargetPath}`"
-            ref="diffViewerRef"
-            :left-path="currentOriginalPath"
-            :right-path="currentTargetPath"
-          />
-        </div>
-
-        <!-- 加载状态 -->
-        <div v-else class="loading-container">
-          <el-skeleton :rows="10" animated />
-          <div class="loading-text">正在加载比对结果...</div>
-        </div>
-      </div>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   Clock, Folder, FolderOpened, List, Refresh, Search, RefreshRight,
-  View, Close, Download
+  Download
 } from '@element-plus/icons-vue'
 import axios from 'axios'
-import DiffViewer from './DiffViewer.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -224,30 +168,12 @@ interface HistoryRecord {
   target_filenames: string
 }
 
-interface DetailRecord {
-  id: number
-  batchId: string
-  originalFilename: string
-  targetFilename: string
-  originalFilePath: string
-  targetFilePath: string
-  createTime: string
-}
-
 // 响应式数据
 const loading = ref(false)
-const detailLoading = ref(false)
 const historyList = ref<HistoryRecord[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const showDetailDialogVisible = ref(false)
-const selectedRecord = ref<HistoryRecord | null>(null)
-const detailRecords = ref<DetailRecord[]>([])
-const diffViewerRef = ref<InstanceType<typeof DiffViewer> | null>(null)
-const showDiffResult = ref(false)
-const currentOriginalPath = ref('')
-const currentTargetPath = ref('')
 
 // 搜索表单数据
 const searchForm = ref({
@@ -264,26 +190,6 @@ const parseFilenames = (filenames: string) => {
 // 刷新数据
 const refreshData = () => {
   fetchHistory()
-}
-
-// 从列表重新比对
-const replayComparisonFromList = async (record: HistoryRecord) => {
-  try {
-    const details = await axios.get(`/contract/history/${record.batch_id}`)
-    if (details.data.code === 200 && details.data.data.length > 0) {
-      const firstRecord = details.data.data[0]
-      // 切换到第一个tab并跳转
-      router.push({
-        path: '/',
-        query: {
-          original: firstRecord.originalFilePath,
-          target: firstRecord.targetFilePath
-        }
-      })
-    }
-  } catch (error) {
-    ElMessage.error('获取文件信息失败')
-  }
 }
 
 // 下载文件
@@ -384,64 +290,6 @@ const fetchHistory = async () => {
   }
 }
 
-// 获取比对详情
-const fetchDetail = async (batchId: string) => {
-  detailLoading.value = true
-  try {
-    const response = await axios.get(`/contract/history/${batchId}`)
-
-    if (response.data.code === 200) {
-      detailRecords.value = response.data.data
-
-      if (detailRecords.value.length > 0) {
-        const firstRecord = detailRecords.value[0]
-        const originalPath = firstRecord?.originalFilePath
-        const targetPath = firstRecord?.targetFilePath
-
-        if (firstRecord && originalPath && targetPath) {
-          currentOriginalPath.value = originalPath
-          currentTargetPath.value = targetPath
-
-          await nextTick()
-          showDiffResult.value = true
-
-          let attempts = 0
-          const waitForDiffViewer = () => {
-            attempts++
-            if (diffViewerRef.value) {
-              startHistoryDiff()
-            } else if (attempts < 20) {
-              setTimeout(waitForDiffViewer, 100)
-            } else {
-              ElMessage.error('比对组件加载失败，请重试')
-            }
-          }
-
-          setTimeout(waitForDiffViewer, 100)
-        } else {
-          ElMessage.error('文件路径信息不完整')
-        }
-      } else {
-        ElMessage.error('没有找到比对记录')
-      }
-    } else {
-      ElMessage.error(response.data.message || '获取详情失败')
-    }
-  } catch (error) {
-    console.error('获取详情失败:', error)
-    ElMessage.error('获取详情失败')
-  } finally {
-    detailLoading.value = false
-  }
-}
-
-// 显示详情对话框
-const showDetailDialog = async (record: HistoryRecord) => {
-  selectedRecord.value = record
-  showDetailDialogVisible.value = true
-  await fetchDetail(record.batch_id)
-}
-
 // 格式化日期
 const formatDate = (dateString: string) => {
   return new Date(dateString).toLocaleString('zh-CN')
@@ -457,41 +305,6 @@ const handleSizeChange = (size: number) => {
 const handleCurrentChange = (page: number) => {
   currentPage.value = page
   fetchHistory()
-}
-
-// 开始历史比对
-const startHistoryDiff = async () => {
-  if (!diffViewerRef.value) {
-    ElMessage.error('比对组件未加载，请重试')
-    return
-  }
-
-  if (!currentOriginalPath.value || !currentTargetPath.value) {
-    ElMessage.error('文件路径为空，请重试')
-    return
-  }
-
-  try {
-    if (typeof diffViewerRef.value.startDiff !== 'function') {
-      ElMessage.error('比对组件方法缺失，请重试')
-      return
-    }
-
-    await diffViewerRef.value.startDiff()
-  } catch (error) {
-    console.error('历史比对失败:', error)
-    ElMessage.error('比对失败: ' + (error as Error).message)
-  }
-}
-
-// 关闭详情对话框
-const handleDetailClose = () => {
-  showDetailDialogVisible.value = false
-  showDiffResult.value = false
-  selectedRecord.value = null
-  detailRecords.value = []
-  currentOriginalPath.value = ''
-  currentTargetPath.value = ''
 }
 
 // 组件挂载时获取数据
@@ -683,32 +496,6 @@ onMounted(() => {
   justify-content: center;
   padding: 24px;
   border-top: 1px solid #f0f2f5;
-}
-
-/* 详情对话框 */
-.detail-info {
-  margin-bottom: 20px;
-}
-
-.diff-result {
-  margin-top: 20px;
-}
-
-.diff-controls {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
-.loading-container {
-  padding: 20px;
-  text-align: center;
-}
-
-.loading-text {
-  margin-top: 16px;
-  color: #7f8c8d;
-  font-size: 14px;
 }
 
 /* 响应式 */

@@ -6,74 +6,72 @@
       <div class="loading-text">正在解析文件内容...</div>
     </div>
 
-    <!-- 内容区域 - 左右分栏 -->
-    <div v-else-if="content" class="content-layout">
-      <!-- 左侧：章节列表 -->
-      <div class="chapter-sidebar">
-        <div class="sidebar-header">
-          <h4>文档章节</h4>
-          <el-text v-if="availableChapters.length > 0" size="small" type="info">
-            {{ availableChapters.length }} 个章节
+    <!-- 内容区域 -->
+    <div v-else-if="content" class="content-wrapper">
+      <!-- 已选择信息栏 -->
+      <div v-if="selectedText || selectedChapterIds.length > 0" class="selection-bar">
+        <div class="selection-info">
+          <el-text type="success">
+            <el-icon><Select /></el-icon>
+            已选择内容
+          </el-text>
+          <el-text v-if="selectedText" size="small">
+            手动选择：{{ selectedText.length }} 字符
+          </el-text>
+          <el-text v-if="selectedChapterIds.length > 0" size="small">
+            章节选择：{{ selectedChapterIds.length }} 个章节
           </el-text>
         </div>
+        <el-button type="text" size="small" @click="clearAll">
+          <el-icon><Close /></el-icon>
+          清除选择
+        </el-button>
+      </div>
 
-        <div v-if="availableChapters.length === 0" class="no-chapters">
-          <el-empty description="未检测到章节" :image-size="80" />
-        </div>
-
-        <div v-else class="chapter-list">
-          <div
-            v-for="chapter in availableChapters"
-            :key="chapter.id"
-            :class="['chapter-item', { selected: selectedChapterIds.includes(chapter.id) }]"
-            @click="toggleChapter(chapter)"
-          >
-            <div class="chapter-item-title">{{ chapter.title }}</div>
-            <el-checkbox
-              :model-value="selectedChapterIds.includes(chapter.id)"
-              @change="toggleChapter(chapter)"
-            />
+      <!-- 章节选择区域 -->
+      <div v-if="availableChapters.length > 0" class="chapter-section">
+        <div class="chapter-header" @click="showChapterList = !showChapterList">
+          <div class="header-left">
+            <el-icon class="arrow-icon" :class="{ expanded: showChapterList }">
+              <ArrowRight />
+            </el-icon>
+            <span class="chapter-title">文档章节</span>
+            <el-tag size="small" type="info">{{ availableChapters.length }} 个</el-tag>
+          </div>
+          <div class="header-actions">
+            <el-button size="small" text @click.stop="selectAllChapters">全选</el-button>
+            <el-button size="small" text @click.stop="clearAllChapters">清除</el-button>
           </div>
         </div>
 
-        <!-- 章节操作按钮 -->
-        <div v-if="availableChapters.length > 0" class="sidebar-actions">
-          <el-button size="small" @click="selectAllChapters">全选</el-button>
-          <el-button size="small" @click="clearAllChapters">清除</el-button>
+        <!-- 可折叠的章节列表 -->
+        <div v-show="showChapterList" class="chapter-list-wrapper">
+          <div class="chapter-list">
+            <div
+              v-for="chapter in availableChapters"
+              :key="chapter.id"
+              :class="['chapter-item', { selected: selectedChapterIds.includes(chapter.id) }]"
+              @click="toggleChapter(chapter)"
+            >
+              <div class="chapter-item-title">{{ chapter.title }}</div>
+              <el-checkbox
+                :model-value="selectedChapterIds.includes(chapter.id)"
+                @change="toggleChapter(chapter)"
+                @click.stop
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 右侧：文档内容 -->
-      <div class="document-area">
-        <!-- 已选择信息 -->
-        <div v-if="selectedText || selectedChapterIds.length > 0" class="selection-bar">
-          <div class="selection-info">
-            <el-text type="success">
-              <el-icon><Select /></el-icon>
-              已选择内容
-            </el-text>
-            <el-text v-if="selectedText" size="small">
-              手动选择：{{ selectedText.length }} 字符
-            </el-text>
-            <el-text v-if="selectedChapterIds.length > 0" size="small">
-              章节选择：{{ selectedChapterIds.length }} 个章节
-            </el-text>
-          </div>
-          <el-button type="text" size="small" @click="clearAll">
-            <el-icon><Close /></el-icon>
-            清除选择
-          </el-button>
-        </div>
-
-        <!-- 文档内容显示 -->
-        <div
-          ref="contentDisplayRef"
-          class="content-display"
-          @mouseup="handleTextSelection"
-          @selectstart="handleSelectionStart"
-        >
-          <div class="content-text" v-html="highlightedContent"></div>
-        </div>
+      <!-- 文档内容显示 -->
+      <div
+        ref="contentDisplayRef"
+        class="content-display"
+        @mouseup="handleTextSelection"
+        @selectstart="handleSelectionStart"
+      >
+        <div class="content-text" v-html="highlightedContent"></div>
       </div>
     </div>
 
@@ -91,7 +89,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Document, Close, Select } from '@element-plus/icons-vue'
+import { Document, Close, Select, ArrowRight } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 // 章节数据接口
@@ -139,6 +137,7 @@ const availableChapters = ref<Chapter[]>([])
 const selectedChapterIds = ref<string[]>([])
 const selectedChapterContent = ref('')
 const docStructure = ref<DocStructure | null>(null) // 文档结构信息
+const showChapterList = ref(false) // 控制章节列表展开/折叠
 
 // 章节模式相关
 const currentChapterId = ref<string | null>(null)
@@ -1171,51 +1170,90 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 内容布局 - 左右分栏 */
-.content-layout {
-  display: flex;
-  height: 100%;
-  gap: 16px;
-  overflow: hidden;
-}
-
-/* 左侧章节列表 */
-.chapter-sidebar {
-  width: 240px;
+/* 内容区域 */
+.content-wrapper {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
+  gap: 12px;
   overflow: hidden;
-  flex-shrink: 0;
 }
 
-.sidebar-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid #e4e7ed;
-  background: #f8f9fa;
+/* 选择状态栏 */
+.selection-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae7ff;
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
-.sidebar-header h4 {
-  margin: 0;
+.selection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 章节选择区域 */
+.chapter-section {
+  flex-shrink: 0;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.chapter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.chapter-header:hover {
+  background: #f0f2f5;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrow-icon {
+  transition: transform 0.3s;
+  font-size: 14px;
+}
+
+.arrow-icon.expanded {
+  transform: rotate(90deg);
+}
+
+.chapter-title {
   font-size: 14px;
   font-weight: 600;
   color: #2c3e50;
 }
 
-.no-chapters {
-  flex: 1;
+.header-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  gap: 8px;
+}
+
+/* 章节列表 */
+.chapter-list-wrapper {
+  border-top: 1px solid #e4e7ed;
+  background: white;
 }
 
 .chapter-list {
-  flex: 1;
+  max-height: 240px;
   overflow-y: auto;
   padding: 8px;
 }
@@ -1250,39 +1288,7 @@ onUnmounted(() => {
   padding-right: 8px;
 }
 
-.sidebar-actions {
-  padding: 12px 16px;
-  border-top: 1px solid #e4e7ed;
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-}
-
-/* 右侧文档区域 */
-.document-area {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.selection-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: #f0f9ff;
-  border: 1px solid #bae7ff;
-  border-radius: 8px;
-  margin-bottom: 12px;
-}
-
-.selection-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
+/* 文档内容显示 */
 .content-display {
   flex: 1;
   overflow-y: auto;
