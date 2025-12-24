@@ -1,9 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import ContractCompare from '../components/ContractCompare.vue';
 import HistoryTab from '../components/HistoryTab.vue';
 
+const route = useRoute();
+const router = useRouter();
 const activeTab = ref('compare');
+
+// 监听路由变化，切换tab
+watch(() => route.query.tab, (newTab) => {
+  if (newTab) {
+    activeTab.value = newTab as string;
+  }
+}, { immediate: true });
+
+// 监听tab切换，更新路由
+watch(activeTab, (newTab) => {
+  const currentTab = route.query.tab;
+  if (currentTab !== newTab) {
+    router.replace({
+      query: { tab: newTab }
+    });
+  }
+});
 </script>
 
 <template>

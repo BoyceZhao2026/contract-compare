@@ -113,7 +113,10 @@
             </div>
 
             <div class="item-actions">
-
+              <el-button link type="primary" @click.stop="replayComparison(record)">
+                <el-icon><RefreshRight /></el-icon>
+                重新比对
+              </el-button>
               <el-button link type="primary" @click.stop="downloadFile(record, 'original')">
                 <el-icon><Download /></el-icon>
                 下载原文件
@@ -190,6 +193,32 @@ const parseFilenames = (filenames: string) => {
 // 刷新数据
 const refreshData = () => {
   fetchHistory()
+}
+
+// 重新比对
+const replayComparison = async (record: HistoryRecord) => {
+  try {
+    const details = await axios.get(`/contract/history/${record.batch_id}`)
+    if (details.data.code === 200 && details.data.data.length > 0) {
+      const firstRecord = details.data.data[0]
+      // 跳转到首页（新建比对tab），并传递文件路径、文件名和tab参数
+      router.push({
+        path: '/',
+        query: {
+          tab: 'compare',
+          original: firstRecord.originalFilePath,
+          originalFilename: firstRecord.originalFilename,
+          target: firstRecord.targetFilePath,
+          targetFilename: firstRecord.targetFilename
+        }
+      })
+    } else {
+      ElMessage.error('获取文件信息失败')
+    }
+  } catch (error) {
+    console.error('获取文件信息失败:', error)
+    ElMessage.error('获取文件信息失败')
+  }
 }
 
 // 下载文件

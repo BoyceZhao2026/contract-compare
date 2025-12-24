@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, nextTick, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { UploadProps, UploadFile } from 'element-plus';
 import { UploadFilled, DocumentCopy, Select, ArrowLeft } from '@element-plus/icons-vue';
@@ -209,7 +209,7 @@ const backToContentSelector = () => {
 
 // 从查询参数加载文件
 const loadFilesFromQuery = async () => {
-  const { original, target, originalContent, targetContent } = route.query;
+  const { original, target, originalFilename, targetFilename, originalContent, targetContent } = route.query;
 
   if (original && target) {
     try {
@@ -225,21 +225,22 @@ const loadFilesFromQuery = async () => {
         })
       ]);
 
-      // 从路径中提取文件名
-      const getFilenameFromPath = (path: string) => {
+      // 从路径中提取文件名（如果没有提供文件名）
+      const getFilenameFromPath = (path: string, fallbackName?: string) => {
+        if (fallbackName) return fallbackName as string;
         const parts = path.split('/');
         return parts[parts.length - 1] || 'unknown.docx';
       };
 
       // 创建文件信息
       leftFile.value = {
-        name: getFilenameFromPath(original as string),
+        name: getFilenameFromPath(original as string, originalFilename as string),
         path: original as string,
         size: originalResponse.data.size || 0
       };
 
       rightFile.value = {
-        name: getFilenameFromPath(target as string),
+        name: getFilenameFromPath(target as string, targetFilename as string),
         path: target as string,
         size: targetResponse.data.size || 0
       };
@@ -262,9 +263,8 @@ const loadFilesFromQuery = async () => {
         hasTargetContent: !!targetContent
       });
 
-      // 自动开始比对
-      await nextTick()
-      startComparison();
+      // 显示内容选择器
+      showContentSelector.value = true;
 
     } catch (error) {
       console.error('加载文件失败:', error);
@@ -288,6 +288,11 @@ const resetUpload = () => {
 
 // 组件挂载时检查查询参数
 onMounted(() => {
+  loadFilesFromQuery();
+});
+
+// 监听路由变化，重新加载文件
+watch(() => route.query, () => {
   loadFilesFromQuery();
 });
 </script>
