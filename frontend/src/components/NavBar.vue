@@ -3,7 +3,7 @@
     <div class="navbar-content">
       <div class="navbar-brand">
         <el-icon class="brand-icon"><Document /></el-icon>
-        <span class="brand-text">合同智能比对系统</span>
+        <span class="brand-text">合同模板对比</span>
       </div>
 
     </div>
@@ -22,7 +22,7 @@ const activeIndex = computed(() => route.path)
 
 <style scoped>
 .navbar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   position: sticky;
   top: 0;

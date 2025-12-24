@@ -1,34 +1,71 @@
 <template>
   <div class="file-content-selector">
-    <el-card class="content-card">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading-container">
+      <el-skeleton :rows="15" animated />
+      <div class="loading-text">正在解析文件内容...</div>
+    </div>
 
-      <!-- 模式切换 -->
-      <div v-if="content && !loading" class="mode-switch">
-        <el-radio-group v-model="selectionMode" @change="onModeChange" class="mode-group">
-          <el-radio-button label="manual">
-            <el-icon><Select /></el-icon>
-            手动选择
-          </el-radio-button>
-          <el-radio-button label="chapter">
-            <el-icon><Document /></el-icon>
-            章节选择
-          </el-radio-button>
-        </el-radio-group>
+    <!-- 内容区域 - 左右分栏 -->
+    <div v-else-if="content" class="content-layout">
+      <!-- 左侧：章节列表 -->
+      <div class="chapter-sidebar">
+        <div class="sidebar-header">
+          <h4>文档章节</h4>
+          <el-text v-if="availableChapters.length > 0" size="small" type="info">
+            {{ availableChapters.length }} 个章节
+          </el-text>
+        </div>
 
-        <el-text v-if="selectionMode === 'chapter' && availableChapters.length > 0" size="small" type="info">
-          检测到 {{ availableChapters.length }} 个章节
-        </el-text>
+        <div v-if="availableChapters.length === 0" class="no-chapters">
+          <el-empty description="未检测到章节" :image-size="80" />
+        </div>
+
+        <div v-else class="chapter-list">
+          <div
+            v-for="chapter in availableChapters"
+            :key="chapter.id"
+            :class="['chapter-item', { selected: selectedChapterIds.includes(chapter.id) }]"
+            @click="toggleChapter(chapter)"
+          >
+            <div class="chapter-item-title">{{ chapter.title }}</div>
+            <el-checkbox
+              :model-value="selectedChapterIds.includes(chapter.id)"
+              @change="toggleChapter(chapter)"
+            />
+          </div>
+        </div>
+
+        <!-- 章节操作按钮 -->
+        <div v-if="availableChapters.length > 0" class="sidebar-actions">
+          <el-button size="small" @click="selectAllChapters">全选</el-button>
+          <el-button size="small" @click="clearAllChapters">清除</el-button>
+        </div>
       </div>
 
-      <!-- 加载状态 -->
-      <div v-if="loading" class="loading-container">
-        <el-skeleton :rows="15" animated />
-        <div class="loading-text">正在解析文件内容...</div>
-      </div>
+      <!-- 右侧：文档内容 -->
+      <div class="document-area">
+        <!-- 已选择信息 -->
+        <div v-if="selectedText || selectedChapterIds.length > 0" class="selection-bar">
+          <div class="selection-info">
+            <el-text type="success">
+              <el-icon><Select /></el-icon>
+              已选择内容
+            </el-text>
+            <el-text v-if="selectedText" size="small">
+              手动选择：{{ selectedText.length }} 字符
+            </el-text>
+            <el-text v-if="selectedChapterIds.length > 0" size="small">
+              章节选择：{{ selectedChapterIds.length }} 个章节
+            </el-text>
+          </div>
+          <el-button type="text" size="small" @click="clearAll">
+            <el-icon><Close /></el-icon>
+            清除选择
+          </el-button>
+        </div>
 
-      <!-- 手动选择模式 -->
-      <div v-else-if="content && selectionMode === 'manual'" class="content-container">
-        <!-- 文本选择区域 -->
+        <!-- 文档内容显示 -->
         <div
           ref="contentDisplayRef"
           class="content-display"
@@ -37,112 +74,17 @@
         >
           <div class="content-text" v-html="highlightedContent"></div>
         </div>
-
-        <!-- 选择结果 -->
-        <div v-if="selectedText" class="selection-result">
-          <div class="selection-header">
-            <span class="selection-title">已选择内容：</span>
-            <el-button
-              type="text"
-              size="small"
-              @click="clearSelection"
-              class="clear-btn"
-            >
-              <el-icon><Close /></el-icon>
-              清除选择
-            </el-button>
-          </div>
-          <div class="selected-text-preview">{{ selectedText }}</div>
-          <div class="selection-info">
-            <el-text size="small" type="info">
-              已选择 {{ selectedText.length }} 个字符
-            </el-text>
-          </div>
-        </div>
       </div>
+    </div>
 
-      <!-- 章节选择模式 -->
-      <div v-else-if="content && selectionMode === 'chapter'" class="chapter-container">
-        <!-- 顶部操作栏 -->
-        <div class="chapter-header">
-          <span class="chapter-title">文档章节</span>
-          <div class="chapter-actions">
-            <el-button size="small" @click="selectAllChapters">
-              全选
-            </el-button>
-            <el-button size="small" @click="clearAllChapters">
-              清除
-            </el-button>
-          </div>
-        </div>
+    <!-- 空状态 -->
+    <div v-else-if="!filePath" class="empty-state">
+      <el-empty description="请先选择文件" />
+    </div>
 
-        <!-- 统一滚动区域 -->
-        <div class="chapter-scroll-container">
-          <!-- 章节目录 -->
-          <div class="chapter-toc">
-            <h3>目录</h3>
-            <div v-if="availableChapters.length === 0" class="no-chapters">
-              无一级标题
-            </div>
-            <div v-else class="toc-list">
-              <div
-                v-for="chapter in availableChapters"
-                :key="chapter.id"
-                :class="['toc-item', { active: currentChapterId === chapter.id }]"
-                @click="selectAndScrollToChapter(chapter)"
-              >
-                {{ chapter.title }}
-              </div>
-            </div>
-          </div>
-
-          <!-- 章节信息展示区 -->
-          <div v-if="selectedChapterIds.length > 0" class="selected-chapters-info">
-            <div class="info-header">
-              <span>已选择章节：</span>
-              <el-button
-                type="text"
-                size="small"
-                @click="clearAllChapters"
-                class="clear-btn"
-              >
-                <el-icon><Close /></el-icon>
-                清除选择
-              </el-button>
-            </div>
-            <div class="chapters-list">
-              <el-tag
-                v-for="chapterId in selectedChapterIds"
-                :key="chapterId"
-                :type="currentChapterId === chapterId ? 'primary' : 'info'"
-                size="small"
-                class="chapter-tag"
-                @click="selectAndScrollToChapter(getChapterById(chapterId)!)"
-              >
-                {{ getChapterById(chapterId)?.title }}
-              </el-tag>
-            </div>
-            <div class="chapters-content">
-              <div v-html="selectedChapterContent"></div>
-            </div>
-          </div>
-
-          <!-- 文档内容展示 -->
-          <div class="document-content">
-            <div ref="chapterContentRef" id="output" v-html="highlightedContent"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 空状态 -->
-      <div v-else-if="!filePath" class="empty-state">
-        <el-empty description="请先选择文件" />
-      </div>
-
-      <div v-else class="empty-state">
-        <el-empty description="文件内容解析失败" />
-      </div>
-    </el-card>
+    <div v-else class="empty-state">
+      <el-empty description="文件内容解析失败" />
+    </div>
   </div>
 </template>
 
@@ -537,6 +479,35 @@ const clearAllChapters = () => {
   })
 }
 
+// 切换章节选择
+const toggleChapter = (chapter: Chapter) => {
+  const index = selectedChapterIds.value.indexOf(chapter.id)
+  if (index > -1) {
+    // 已选中，取消选择
+    selectedChapterIds.value.splice(index, 1)
+  } else {
+    // 未选中，添加选择
+    selectedChapterIds.value.push(chapter.id)
+  }
+  onChapterSelectionChange(selectedChapterIds.value)
+}
+
+// 清除所有选择（包括手动选择和章节选择）
+const clearAll = () => {
+  selectedText.value = ''
+  selectedChapterIds.value = []
+  selectedChapterContent.value = ''
+  currentChapterId.value = null
+  currentChapter.value = null
+  emit('update:modelValue', '')
+  emit('textSelected', '')
+
+  // 清除所有高亮
+  nextTick(() => {
+    clearHighlights()
+  })
+}
+
 const clearChapterSelection = () => {
   selectedChapterIds.value = []
   selectedChapterContent.value = ''
@@ -709,7 +680,7 @@ const loadFileContent = async (filePath: string) => {
       throw new Error('不支持的文件格式')
     }
 
-    ElMessage.success('文件内容加载完成')
+    //ElMessage.success('文件内容加载完成')
   } catch (error) {
     console.error('加载文件内容失败:', error)
     ElMessage.error('文件内容加载失败: ' + (error as Error).message)
@@ -1061,7 +1032,7 @@ watch(() => props.filePath, (newFilePath) => {
   if (newFilePath) {
     loadFileContent(newFilePath)
   } else {
-    clearAll()
+    resetContent()
   }
 }, { immediate: true })
 
@@ -1129,8 +1100,8 @@ const clearSelection = () => {
   window.getSelection()?.removeAllRanges()
 }
 
-// 清除所有内容
-const clearAll = () => {
+// 重置所有内容
+const resetContent = () => {
   content.value = ''
   rawContent.value = ''
   selectedText.value = ''
@@ -1184,42 +1155,9 @@ onUnmounted(() => {
 
 <style scoped>
 .file-content-selector {
-  margin-bottom: 20px;
-}
-
-.content-card {
-  min-height: 400px;
-}
-
-.card-header {
+  height: 100%;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.filename {
-  color: #667eea;
-}
-
-/* 模式切换样式 */
-.mode-switch {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #f0f2f5;
-}
-
-.mode-group {
-  display: flex;
+  flex-direction: column;
 }
 
 .loading-container {
@@ -1233,474 +1171,177 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.content-container {
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
+/* 内容布局 - 左右分栏 */
+.content-layout {
+  display: flex;
+  height: 100%;
+  gap: 16px;
   overflow: hidden;
 }
 
+/* 左侧章节列表 */
+.chapter-sidebar {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.no-chapters {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.chapter-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.chapter-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+}
+
+.chapter-item:hover {
+  background: #f5f7fa;
+}
+
+.chapter-item.selected {
+  background: #e3f2fd;
+  border: 1px solid #417FF2;
+}
+
+.chapter-item-title {
+  flex: 1;
+  font-size: 14px;
+  color: #2c3e50;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 8px;
+}
+
+.sidebar-actions {
+  padding: 12px 16px;
+  border-top: 1px solid #e4e7ed;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+/* 右侧文档区域 */
+.document-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.selection-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae7ff;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.selection-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .content-display {
-  max-height: 300px;
+  flex: 1;
   overflow-y: auto;
   padding: 20px;
   cursor: text;
   user-select: text;
   line-height: 1.8;
   font-size: 14px;
-  color: #2c3e50;
+  background: white;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
 }
 
 .content-text {
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  color: #2c3e50;
 }
 
-
-/* 章节选择样式 */
-.chapter-container {
-  padding: 16px;
-  height: 600px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* 顶部操作栏 */
-.chapter-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e4e7ed;
-  flex-shrink: 0;
-}
-
-.chapter-title {
-  font-size: 16px;
+.content-text :deep(h1),
+.content-text :deep(h2),
+.content-text :deep(h3),
+.content-text :deep(h4),
+.content-text :deep(h5),
+.content-text :deep(h6) {
+  margin-top: 20px;
+  margin-bottom: 10px;
   font-weight: 600;
-  color: #333;
-}
-
-.chapter-actions {
-  display: flex;
-  gap: 8px;
-}
-
-/* 统一滚动区域 */
-.chapter-scroll-container {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding-right: 8px;
-  min-height: 0; /* 允许flex子元素收缩 */
-  position: relative; /* 确保定位上下文正确 */
-}
-
-/* 确保滚动容器内部内容能够撑开高度 */
-.chapter-scroll-container > * {
-  flex-shrink: 0;
-}
-
-/* 章节目录 */
-.chapter-toc {
-  background: #f9f9f9;
-  border-radius: 8px;
-  padding: 16px;
-  border: 1px solid #e4e7ed;
-  margin-bottom: 16px;
-}
-
-.chapter-toc h3 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  color: #333;
-  font-weight: 600;
-}
-
-.no-chapters {
-  color: #999;
-  text-align: center;
-  padding: 20px 0;
-  font-size: 14px;
-}
-
-.toc-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.toc-item {
-  padding: 8px 12px;
-  margin: 4px 0;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.3s ease;
-  font-size: 14px;
-  color: #333;
-  border: 1px solid transparent;
-}
-
-.toc-item:hover {
-  background: #e3f2fd;
-  color: #1976d2;
-}
-
-.toc-item.active {
-  background: #1976d2;
-  color: white;
-  font-weight: bold;
-  border-color: #1565c0;
-}
-
-/* 章节信息展示区 */
-.selected-chapters-info {
-  background: #f0f9ff;
-  border: 1px solid #e3f2fd;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
-}
-
-.info-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.chapters-list {
-  margin-bottom: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.chapter-tag {
-  cursor: pointer;
-}
-
-.chapters-content {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 12px;
-  background: white;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-/* 文档内容展示 */
-.document-content {
-  padding: 20px;
-  background: white;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #333;
-  min-height: 200px; /* 确保有最小高度 */
-}
-
-.document-content #output {
-  min-height: 100%;
-}
-
-/* 章节高亮样式（参考您提供的代码） */
-.section-highlight {
-  background-color: #fffacd !important;
-  padding: 10px;
-  border-left: 4px solid #ffd700;
-  border-radius: 4px;
-  margin: 4px 0;
-}
-
-.chapter-content-display {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  background: white;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  font-size: 14px;
-  line-height: 1.8;
-  color: #333;
-}
-
-.chapter-content-display * {
-  transition: background-color 0.3s;
-}
-
-.chapter-indicator {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e4e7ed;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.chapter-list {
-  margin-bottom: 16px;
-}
-
-.chapter-list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.chapter-list-title {
-  font-weight: 500;
   color: #2c3e50;
-  font-size: 16px;
 }
 
-.chapter-actions {
-  display: flex;
-  gap: 8px;
+.content-text :deep(h1) {
+  font-size: 24px;
+  border-bottom: 2px solid #e4e7ed;
+  padding-bottom: 8px;
 }
 
-.chapter-checkbox-group {
-  max-height: 350px;
-  overflow-y: auto;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  padding: 12px;
+.content-text :deep(h2) {
+  font-size: 20px;
 }
 
-.chapter-item {
-  margin-bottom: 16px;
-  padding: 12px;
-  border: 1px solid #f0f2f5;
-  border-radius: 6px;
-  background: #fafafa;
-  transition: all 0.2s ease;
+.content-text :deep(h3) {
+  font-size: 18px;
 }
 
-.chapter-item:hover {
-  border-color: #409eff;
-  background: #f0f9ff;
-}
-
-.chapter-item :deep(.el-checkbox__label) {
-  width: 100%;
-  line-height: 1.6;
-}
-
-.chapter-info {
-  width: 100%;
-}
-
-.chapter-title {
-  font-weight: 500;
-  color: #2c3e50;
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-
-.chapter-meta {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 6px;
-}
-
-.chapter-length {
-  font-size: 12px;
-  color: #909399;
-  background: #f5f7fa;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.chapter-preview {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.5;
-  background: white;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
-  margin-top: 6px;
-}
-
-.chapter-selection-result {
-  border-top: 1px solid #f0f2f5;
-  padding-top: 16px;
-}
-
-.selected-chapters-preview {
-  max-height: 200px;
-  overflow-y: auto;
+.content-text :deep(p) {
   margin-bottom: 12px;
+  text-align: justify;
 }
 
-.selected-chapter-item {
-  margin-bottom: 12px;
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-}
-
-.selected-chapter-title {
-  font-weight: 500;
-  color: #2c3e50;
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-
-.selected-chapter-content {
-  font-size: 13px;
-  color: #666;
-  line-height: 1.5;
-  background: white;
-  padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #e4e7ed;
-}
-
-/* 增强文本选择的高亮效果 */
-.content-display {
-  &::selection {
-    background-color: #fff2e8;
-    color: #e6a23c;
-    text-shadow: none;
-  }
-
-  &::-moz-selection {
-    background-color: #fff2e8;
-    color: #e6a23c;
-    text-shadow: none;
-  }
-}
-
-:deep(mark) {
-  background-color: #fff2e8;
-  color: #e6a23c;
+/* 高亮样式 */
+.content-text :deep(.highlight-chapter) {
+  background-color: #fff59d;
   padding: 2px 4px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.selection-result {
-  border-top: 1px solid #f0f2f5;
-  padding: 16px;
-  background: #f8f9fa;
-}
-
-.selection-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.selection-title {
-  font-weight: 500;
-  color: #2c3e50;
-  font-size: 14px;
-}
-
-.clear-btn {
-  color: #909399;
-}
-
-.clear-btn:hover {
-  color: #409eff;
-}
-
-.selected-text-preview {
-  max-height: 100px;
-  overflow-y: auto;
-  padding: 12px;
-  background: white;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  margin-bottom: 8px;
-}
-
-.selection-info {
-  text-align: right;
+  border-radius: 2px;
 }
 
 .empty-state {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 200px;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .mode-switch {
-    flex-direction: column;
-    gap: 12px;
-    align-items: stretch;
-  }
-
-  .chapter-list-header {
-    flex-direction: column;
-    gap: 8px;
-    align-items: stretch;
-  }
-
-  .chapter-actions {
-    justify-content: center;
-  }
-}
-
-/* 自定义滚动条样式 */
-.selected-chapters-preview::-webkit-scrollbar,
-.selected-text-preview::-webkit-scrollbar,
-.chapter-scroll-container::-webkit-scrollbar {
-  width: 6px;
-}
-
-.selected-chapters-preview::-webkit-scrollbar-track,
-.selected-text-preview::-webkit-scrollbar-track,
-.chapter-scroll-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-.selected-chapters-preview::-webkit-scrollbar-thumb,
-.selected-text-preview::-webkit-scrollbar-thumb,
-.chapter-scroll-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-.selected-chapters-preview::-webkit-scrollbar-thumb:hover,
-.selected-text-preview::-webkit-scrollbar-thumb:hover,
-.chapter-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
-
-/* 滚动条样式优化 */
-.chapter-scroll-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.chapter-scroll-container::-webkit-scrollbar-track {
-  background: #f8f9fa;
-  border-radius: 4px;
-}
-
-.chapter-scroll-container::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 4px;
-  border: 1px solid #f1f1f1;
-}
-
-.chapter-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  min-height: 300px;
 }
 </style>

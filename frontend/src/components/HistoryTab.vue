@@ -1,24 +1,5 @@
 <template>
-  <div class="history-page">
-    <!-- 页面头部 -->
-    <div class="page-header">
-      <div class="header-content">
-        <div class="header-info">
-          <h1 class="page-title">
-            <el-icon><Clock /></el-icon>
-            合同比对历史
-          </h1>
-          <p class="page-subtitle">查看和管理所有合同比对记录</p>
-        </div>
-        <div class="header-actions">
-          <el-button type="primary" size="large" @click="showNewComparisonDialog = true" class="new-compare-btn">
-            <el-icon><Plus /></el-icon>
-            新建比对
-          </el-button>
-        </div>
-      </div>
-    </div>
-
+  <div class="history-tab">
     <!-- 搜索区域 -->
     <div class="search-section">
       <div class="search-container">
@@ -99,28 +80,19 @@
                 <div class="file-list-with-download">
                   <div class="file-tags">
                     <el-tag
-                      v-for="filename in (record.original_filenames ? record.original_filenames.split(',') : [])"
-                      :key="filename"
+                      v-for="(filename, index) in parseFilenames(record.original_filenames)"
+                      :key="'orig-' + index"
                       type="info"
                       size="small"
-                      class="file-tag"
                     >
                       {{ filename }}
                     </el-tag>
                   </div>
-                  <el-button
-                    v-if="record.original_filenames"
-                    type="text"
-                    size="small"
-                    @click.stop="downloadFile(record, 'original')"
-                    class="download-btn"
-                    title="下载原文件"
-                  >
-                    <el-icon><Download /></el-icon>
-                  </el-button>
                 </div>
               </div>
+
               <div class="vs-divider">VS</div>
+
               <div class="file-group">
                 <div class="file-label">
                   <el-icon><FolderOpened /></el-icon>
@@ -129,42 +101,43 @@
                 <div class="file-list-with-download">
                   <div class="file-tags">
                     <el-tag
-                      v-for="filename in (record.target_filenames ? record.target_filenames.split(',') : [])"
-                      :key="filename"
+                      v-for="(filename, index) in parseFilenames(record.target_filenames)"
+                      :key="'target-' + index"
                       type="success"
                       size="small"
-                      class="file-tag"
                     >
                       {{ filename }}
                     </el-tag>
                   </div>
-                  <el-button
-                    v-if="record.target_filenames"
-                    type="text"
-                    size="small"
-                    @click.stop="downloadFile(record, 'target')"
-                    class="download-btn"
-                    title="下载目标文件"
-                  >
-                    <el-icon><Download /></el-icon>
-                  </el-button>
                 </div>
               </div>
             </div>
-            <div class="item-actions">
-              <el-button type="text" @click.stop="showDetailDialog(record)">
-                <el-icon><View /></el-icon>
-                查看详情
-              </el-button>
 
+            <div class="item-actions">
+              <el-button link type="primary" @click.stop="replayComparisonFromList(record)">
+                <el-icon><View /></el-icon>
+                重新比对
+              </el-button>
+              <el-button link type="primary" @click.stop="downloadFile(record, 'original')">
+                <el-icon><Download /></el-icon>
+                下载原文件
+              </el-button>
+              <el-button link type="primary" @click.stop="downloadFile(record, 'target')">
+                <el-icon><Download /></el-icon>
+                下载目标文件
+              </el-button>
             </div>
           </div>
 
-
+          <!-- 空状态 -->
+          <el-empty
+            v-if="!loading && historyList.length === 0"
+            description="暂无比对记录"
+          />
         </div>
 
         <!-- 分页 -->
-        <div v-if="historyList.length > 0" class="pagination-wrapper">
+        <div v-if="total > 0" class="pagination-wrapper">
           <el-pagination
             v-model:current-page="currentPage"
             v-model:page-size="pageSize"
@@ -178,70 +151,68 @@
       </el-card>
     </div>
 
-    <!-- 新建比对对话框 -->
-    <NewComparisonDialog
-      v-model="showNewComparisonDialog"
-      @created="onComparisonCreated"
-    />
-
     <!-- 详情对话框 -->
     <el-dialog
       v-model="showDetailDialogVisible"
-      title="比对详情"
+      :title="`比对详情 - ${formatDate(selectedRecord?.create_time || '')}`"
       width="95%"
-      :before-close="handleDetailClose"
-      class="detail-dialog"
-      top="2vh"
+      :close-on-click-modal="false"
+      @close="handleDetailClose"
     >
-      <div v-if="selectedRecord" class="detail-header">
-        <el-descriptions :column="3" border size="small">
-          <el-descriptions-item label="批次ID">
-            <el-tag type="primary">{{ selectedRecord.batch_id }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="比对时间">
-            {{ formatDate(selectedRecord.create_time) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="文件数量">
-            {{ detailRecords.length }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </div>
-
-      <!-- 比对结果展示 -->
-      <div v-if="showDiffResult" class="diff-result">
-        <div class="diff-controls">
-          <el-button @click="handleDetailClose">
-            <el-icon><Close /></el-icon>
-            关闭
-          </el-button>
+      <div v-loading="detailLoading">
+        <!-- 详情信息 -->
+        <div v-if="detailRecords.length > 0" class="detail-info">
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="原文件">
+              {{ detailRecords[0]?.originalFilename }}
+            </el-descriptions-item>
+            <el-descriptions-item label="目标文件">
+              {{ detailRecords[0]?.targetFilename }}
+            </el-descriptions-item>
+            <el-descriptions-item label="比对时间">
+              {{ formatDate(selectedRecord?.create_time || '') }}
+            </el-descriptions-item>
+            <el-descriptions-item label="文件数量">
+              {{ detailRecords.length }}
+            </el-descriptions-item>
+          </el-descriptions>
         </div>
-        <DiffViewer
-          :key="`diff-${currentOriginalPath}-${currentTargetPath}`"
-          ref="diffViewerRef"
-          :left-path="currentOriginalPath"
-          :right-path="currentTargetPath"
-        />
-      </div>
 
-      <!-- 加载状态 -->
-      <div v-else-if="detailLoading" class="loading-container">
-        <el-skeleton :rows="10" animated />
-        <div class="loading-text">正在加载比对结果...</div>
+        <!-- 比对结果展示 -->
+        <div v-if="showDiffResult" class="diff-result">
+          <div class="diff-controls">
+            <el-button @click="handleDetailClose">
+              <el-icon><Close /></el-icon>
+              关闭
+            </el-button>
+          </div>
+          <DiffViewer
+            :key="`diff-${currentOriginalPath}-${currentTargetPath}`"
+            ref="diffViewerRef"
+            :left-path="currentOriginalPath"
+            :right-path="currentTargetPath"
+          />
+        </div>
+
+        <!-- 加载状态 -->
+        <div v-else class="loading-container">
+          <el-skeleton :rows="10" animated />
+          <div class="loading-text">正在加载比对结果...</div>
+        </div>
       </div>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
-  Plus, Clock, Document, Calendar, Files, List, Refresh, Search, RefreshRight,
-  Folder, FolderOpened, View, Close, Download
+  Clock, Folder, FolderOpened, List, Refresh, Search, RefreshRight,
+  View, Close, Download
 } from '@element-plus/icons-vue'
 import axios from 'axios'
-import NewComparisonDialog from '../components/NewComparisonDialog.vue'
-import DiffViewer from '../components/DiffViewer.vue'
+import DiffViewer from './DiffViewer.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -270,7 +241,6 @@ const historyList = ref<HistoryRecord[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const showNewComparisonDialog = ref(false)
 const showDetailDialogVisible = ref(false)
 const selectedRecord = ref<HistoryRecord | null>(null)
 const detailRecords = ref<DetailRecord[]>([])
@@ -285,6 +255,12 @@ const searchForm = ref({
   dateRange: [] as string[]
 })
 
+// 解析文件名字符串
+const parseFilenames = (filenames: string) => {
+  if (!filenames) return []
+  return filenames.split(',').map(f => f.trim()).filter(f => f)
+}
+
 // 刷新数据
 const refreshData = () => {
   fetchHistory()
@@ -296,8 +272,9 @@ const replayComparisonFromList = async (record: HistoryRecord) => {
     const details = await axios.get(`/contract/history/${record.batch_id}`)
     if (details.data.code === 200 && details.data.data.length > 0) {
       const firstRecord = details.data.data[0]
+      // 切换到第一个tab并跳转
       router.push({
-        name: 'compare',
+        path: '/',
         query: {
           original: firstRecord.originalFilePath,
           target: firstRecord.targetFilePath
@@ -312,15 +289,12 @@ const replayComparisonFromList = async (record: HistoryRecord) => {
 // 下载文件
 const downloadFile = async (record: HistoryRecord, type: 'original' | 'target') => {
   try {
-    // 获取该记录的详细信息以获取文件路径
     const details = await axios.get(`/contract/history/${record.batch_id}`)
-
     if (details.data.code !== 200 || details.data.data.length === 0) {
       ElMessage.error('获取文件信息失败')
       return
     }
 
-    // 找到对应的文件记录
     const fileRecord = details.data.data[0]
     let filePath: string
     let fileName: string
@@ -338,13 +312,11 @@ const downloadFile = async (record: HistoryRecord, type: 'original' | 'target') 
       return
     }
 
-    // 下载文件
     const response = await axios.get('/contract/file/stream', {
       params: { path: filePath },
       responseType: 'blob'
     })
 
-    // 创建下载链接
     const blob = new Blob([response.data])
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -353,7 +325,6 @@ const downloadFile = async (record: HistoryRecord, type: 'original' | 'target') 
     document.body.appendChild(link)
     link.click()
 
-    // 清理
     window.URL.revokeObjectURL(url)
     document.body.removeChild(link)
 
@@ -389,7 +360,6 @@ const fetchHistory = async () => {
       size: pageSize.value
     }
 
-    // 添加搜索参数
     if (searchForm.value.filename) {
       params.filename = searchForm.value.filename
     }
@@ -423,20 +393,8 @@ const fetchDetail = async (batchId: string) => {
     if (response.data.code === 200) {
       detailRecords.value = response.data.data
 
-      console.log('获取到的比对详情数据:', detailRecords.value)
-
-      // 如果有记录，直接开始比对
       if (detailRecords.value.length > 0) {
         const firstRecord = detailRecords.value[0]
-        console.log('第一条记录详情:', firstRecord)
-        console.log('文件路径检查:', {
-          originalFilePath: firstRecord?.originalFilePath,
-          targetFilePath: firstRecord?.targetFilePath,
-          originalFilename: firstRecord?.originalFilename,
-          targetFilename: firstRecord?.targetFilename
-        })
-
-        // 使用驼峰格式的字段名（根据实际返回的数据结构）
         const originalPath = firstRecord?.originalFilePath
         const targetPath = firstRecord?.targetFilePath
 
@@ -444,35 +402,24 @@ const fetchDetail = async (batchId: string) => {
           currentOriginalPath.value = originalPath
           currentTargetPath.value = targetPath
 
-          console.log('设置文件路径成功:', {
-            original: currentOriginalPath.value,
-            target: currentTargetPath.value
-          })
-
-          // 等待DOM更新后启动比对
           await nextTick()
           showDiffResult.value = true
 
-          // 等待DiffViewer组件渲染完成
           let attempts = 0
           const waitForDiffViewer = () => {
             attempts++
             if (diffViewerRef.value) {
-              console.log('DiffViewer组件已加载，开始比对')
               startHistoryDiff()
             } else if (attempts < 20) {
-              console.log(`等待DiffViewer组件加载... (${attempts}/20)`)
               setTimeout(waitForDiffViewer, 100)
             } else {
-              console.error('DiffViewer组件加载超时')
               ElMessage.error('比对组件加载失败，请重试')
             }
           }
 
           setTimeout(waitForDiffViewer, 100)
         } else {
-          console.error('文件路径信息不完整:', firstRecord)
-          ElMessage.error(`文件路径信息不完整，请检查比对记录。原始文件路径: ${originalPath || '空'}, 目标文件路径: ${targetPath || '空'}`)
+          ElMessage.error('文件路径信息不完整')
         }
       } else {
         ElMessage.error('没有找到比对记录')
@@ -512,64 +459,25 @@ const handleCurrentChange = (page: number) => {
   fetchHistory()
 }
 
-// 新建比对完成
-const onComparisonCreated = () => {
-  showNewComparisonDialog.value = false
-  fetchHistory()
-}
-
-// 重新比对
-const replayComparison = () => {
-  if (detailRecords.value.length > 0) {
-    const firstRecord = detailRecords.value[0]
-    if (firstRecord && firstRecord.originalFilePath && firstRecord.targetFilePath) {
-      // 跳转到比对页面并传递文件路径
-      router.push({
-        name: 'compare',
-        query: {
-          original: firstRecord.originalFilePath,
-          target: firstRecord.targetFilePath
-        }
-      })
-      showDetailDialogVisible.value = false
-    } else {
-      ElMessage.error('文件路径信息不完整')
-    }
-  }
-}
-
 // 开始历史比对
 const startHistoryDiff = async () => {
   if (!diffViewerRef.value) {
-    console.error('DiffViewer 组件未加载')
     ElMessage.error('比对组件未加载，请重试')
     return
   }
 
   if (!currentOriginalPath.value || !currentTargetPath.value) {
-    console.error('文件路径为空:', {
-      original: currentOriginalPath.value,
-      target: currentTargetPath.value
-    })
     ElMessage.error('文件路径为空，请重试')
     return
   }
 
   try {
-    console.log('开始历史比对:', {
-      original: currentOriginalPath.value,
-      target: currentTargetPath.value
-    })
-
-    // 检查DiffViewer是否有startDiff方法
     if (typeof diffViewerRef.value.startDiff !== 'function') {
-      console.error('DiffViewer没有startDiff方法')
       ElMessage.error('比对组件方法缺失，请重试')
       return
     }
 
     await diffViewerRef.value.startDiff()
-    console.log('历史比对完成')
   } catch (error) {
     console.error('历史比对失败:', error)
     ElMessage.error('比对失败: ' + (error as Error).message)
@@ -593,70 +501,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.history-page {
-  min-height: calc(100vh - 64px);
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-}
-
-/* 页面头部 */
-.page-header {
-  background: white;
-  padding: 32px 0;
-  border-bottom: 1px solid #e4e7ed;
-  margin-bottom: 32px;
-}
-
-.header-content {
-  max-width: 1400px;
+.history-tab {
+  max-width: 1600px;
   margin: 0 auto;
-  padding: 0 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.page-title {
-  margin: 0 0 8px 0;
-  color: #2c3e50;
-  font-size: 32px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.page-title .el-icon {
-  color: #417FF2;
-  font-size: 36px;
-}
-
-.page-subtitle {
-  margin: 0;
-  color: #7f8c8d;
-  font-size: 16px;
-}
-
-.new-compare-btn {
-  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
-  border: none;
-  padding: 12px 32px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(65, 127, 242, 0.3);
-  transition: all 0.3s ease;
-}
-
-.new-compare-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(65, 127, 242, 0.4);
+  padding: 20px;
 }
 
 /* 搜索区域 */
 .search-section {
-  max-width: 1400px;
-  margin: 0 auto 32px;
-  padding: 0 20px;
+  margin-bottom: 20px;
 }
 
 .search-container {
@@ -694,9 +547,7 @@ onMounted(() => {
 
 /* 历史记录部分 */
 .history-section {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 0 20px;
+  margin-bottom: 20px;
 }
 
 .history-card {
@@ -801,23 +652,6 @@ onMounted(() => {
   flex: 1;
 }
 
-.download-btn {
-  padding: 2px 4px;
-  min-width: 28px;
-  height: 24px;
-  border-radius: 4px;
-}
-
-.download-btn:hover {
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-}
-
-.file-tag {
-  border-radius: 6px;
-  font-weight: 500;
-}
-
 .vs-divider {
   font-weight: 700;
   color: #417FF2;
@@ -852,137 +686,53 @@ onMounted(() => {
 }
 
 /* 详情对话框 */
-.detail-dialog :deep(.el-dialog) {
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.detail-dialog :deep(.el-dialog__body) {
-  padding: 0;
-}
-
-.detail-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #f0f2f5;
-  background: #f8f9fa;
+.detail-info {
+  margin-bottom: 20px;
 }
 
 .diff-result {
-  height: 70vh;
-  overflow: hidden;
+  margin-top: 20px;
 }
 
 .diff-controls {
-  padding: 12px 24px;
-  border-bottom: 1px solid #f0f2f5;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .loading-container {
-  padding: 40px;
+  padding: 20px;
   text-align: center;
 }
 
 .loading-text {
-  margin-top: 20px;
+  margin-top: 16px;
   color: #7f8c8d;
-  font-size: 16px;
+  font-size: 14px;
 }
 
-/* DiffViewer样式适配 */
-.diff-result :deep(.diff-viewer-container) {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: calc(100% - 60px);
-}
-
-/* 响应式设计 */
+/* 响应式 */
 @media (max-width: 768px) {
-  .header-content {
+  .history-tab {
+    padding: 16px;
+  }
+
+  .item-content {
     flex-direction: column;
-    align-items: stretch;
-    gap: 20px;
-    text-align: center;
+    gap: 12px;
   }
 
-  .page-title {
-    font-size: 24px;
-    justify-content: center;
-  }
-
-  .search-section {
-    padding: 0 16px;
+  .vs-divider {
+    padding: 8px 0;
   }
 
   .search-form {
     flex-direction: column;
     align-items: stretch;
-    gap: 16px;
-  }
-
-  .search-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
   }
 
   .search-actions {
     margin-left: 0;
-    justify-content: center;
-  }
-
-  .history-section {
-    padding: 0 16px;
-  }
-
-  .item-content {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .vs-divider {
-    text-align: center;
-    padding: 8px 0;
-  }
-
-  .file-comparison {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .file-vs {
-    transform: rotate(90deg);
-  }
-
-  .item-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .item-actions {
-    justify-content: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .page-header {
-    padding: 20px 0;
-  }
-
-  .history-item {
-    padding: 16px;
-  }
-
-  .card-header {
-    padding: 16px;
-  }
-
-  .history-list {
-    padding: 16px;
   }
 }
 </style>

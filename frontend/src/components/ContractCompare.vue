@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue';
-import { ElMessage, ElUpload } from 'element-plus';
+import { ref, onMounted, nextTick } from 'vue';
+import { ElMessage } from 'element-plus';
 import type { UploadProps, UploadFile } from 'element-plus';
-import { UploadFilled, DocumentCopy, View, Select, CloseBold } from '@element-plus/icons-vue';
+import { UploadFilled, DocumentCopy, Select, ArrowLeft } from '@element-plus/icons-vue';
 import DiffViewer from './DiffViewer.vue';
 import FileContentSelector from './FileContentSelector.vue';
 import axios from 'axios';
@@ -23,7 +23,6 @@ const showDiffViewer = ref(false);
 const leftSelectedContent = ref('');
 const rightSelectedContent = ref('');
 const showContentSelector = ref(false);
-const currentSide = ref<'left' | 'right' | null>(null);
 
 const diffViewerRef = ref<InstanceType<typeof DiffViewer> | null>(null);
 const route = useRoute();
@@ -111,6 +110,9 @@ const startComparison = async () => {
     rightSelectedContent: rightSelectedContent.value ? `${rightSelectedContent.value.substring(0, 50)}...` : '全文'
   });
 
+  // 关闭内容选择器
+  showContentSelector.value = false;
+
   isComparing.value = true;
   showDiffViewer.value = true;
 
@@ -189,46 +191,21 @@ const generateBatchId = () => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
-// 显示内容选择器
-const showContentSelectorDialog = (side: 'left' | 'right') => {
-  const file = side === 'left' ? leftFile.value : rightFile.value;
-  if (!file) {
-    ElMessage.warning(`请先上传${side === 'left' ? '原文件' : '目标文件'}`);
-    return;
-  }
+// 处理左侧内容选择
+const handleLeftContentSelected = (selectedText: string) => {
+  leftSelectedContent.value = selectedText;
+};
 
-  currentSide.value = side;
+// 处理右侧内容选择
+const handleRightContentSelected = (selectedText: string) => {
+  rightSelectedContent.value = selectedText;
+};
+
+// 返回到选择内容页面
+const backToContentSelector = () => {
+  showDiffViewer.value = false;
   showContentSelector.value = true;
 };
-
-// 处理内容选择
-const handleContentSelected = (selectedText: string) => {
-  if (currentSide.value === 'left') {
-    leftSelectedContent.value = selectedText;
-  } else if (currentSide.value === 'right') {
-    rightSelectedContent.value = selectedText;
-  }
-};
-
-// 确认内容选择
-const confirmContentSelection = () => {
-  showContentSelector.value = false;
-  currentSide.value = null;
-};
-
-// 清除内容选择
-const clearContentSelection = (side: 'left' | 'right') => {
-  if (side === 'left') {
-    leftSelectedContent.value = '';
-  } else {
-    rightSelectedContent.value = '';
-  }
-};
-
-// 检查是否可以进行比对
-const canStartComparison = computed(() => {
-  return leftFile.value && rightFile.value;
-});
 
 // 从查询参数加载文件
 const loadFilesFromQuery = async () => {
@@ -305,7 +282,6 @@ const resetUpload = () => {
   showDiffViewer.value = false;
   isComparing.value = false;
   showContentSelector.value = false;
-  currentSide.value = null;
   // 清除查询参数
   router.replace({ query: {} });
 };
@@ -318,19 +294,11 @@ onMounted(() => {
 
 <template>
   <div class="contract-compare">
-    <div class="header">
-      <h1>在线合同智能比对系统</h1>
-      <p>上传两个Word文档，系统将自动识别并高亮显示差异</p>
-    </div>
-
-    <div v-if="!showDiffViewer" class="upload-container">
+    <!-- 上传区域 -->
+    <div v-if="!showDiffViewer && !showContentSelector" class="upload-container">
       <div class="upload-area">
         <!-- 左侧上传区域 -->
         <div class="upload-box left">
-          <h3>
-            <DocumentCopy />
-            基准文件（原件）
-          </h3>
           <el-upload
             class="upload-dragger"
             drag
@@ -356,38 +324,6 @@ onMounted(() => {
               <div class="file-details">
                 <div class="file-name">{{ leftFile.name }}</div>
                 <div class="file-size">{{ (leftFile.size / 1024 / 1024).toFixed(2) }} MB</div>
-                <div class="file-actions">
-                  <el-button
-                    v-if="leftSelectedContent"
-                    type="success"
-                    size="small"
-                    plain
-                    @click="showContentSelectorDialog('left')"
-                  >
-                    <el-icon><View /></el-icon>
-                    已选择内容 ({{ leftSelectedContent.length }}字符)
-                  </el-button>
-                  <el-button
-                    v-else
-                    type="primary"
-                    size="small"
-                    plain
-                    @click="showContentSelectorDialog('left')"
-                  >
-                    <el-icon><Select /></el-icon>
-                    选择内容
-                  </el-button>
-                  <el-button
-                    v-if="leftSelectedContent"
-                    type="info"
-                    size="small"
-                    plain
-                    @click="clearContentSelection('left')"
-                  >
-                    <el-icon><CloseBold /></el-icon>
-                    清除选择
-                  </el-button>
-                </div>
               </div>
             </div>
           </el-upload>
@@ -395,10 +331,6 @@ onMounted(() => {
 
         <!-- 右侧上传区域 -->
         <div class="upload-box right">
-          <h3>
-            <DocumentCopy />
-            比对文件（目标件）
-          </h3>
           <el-upload
             class="upload-dragger"
             drag
@@ -424,38 +356,6 @@ onMounted(() => {
               <div class="file-details">
                 <div class="file-name">{{ rightFile.name }}</div>
                 <div class="file-size">{{ (rightFile.size / 1024 / 1024).toFixed(2) }} MB</div>
-                <div class="file-actions">
-                  <el-button
-                    v-if="rightSelectedContent"
-                    type="success"
-                    size="small"
-                    plain
-                    @click="showContentSelectorDialog('right')"
-                  >
-                    <el-icon><View /></el-icon>
-                    已选择内容 ({{ rightSelectedContent.length }}字符)
-                  </el-button>
-                  <el-button
-                    v-else
-                    type="primary"
-                    size="small"
-                    plain
-                    @click="showContentSelectorDialog('right')"
-                  >
-                    <el-icon><Select /></el-icon>
-                    选择内容
-                  </el-button>
-                  <el-button
-                    v-if="rightSelectedContent"
-                    type="info"
-                    size="small"
-                    plain
-                    @click="clearContentSelection('right')"
-                  >
-                    <el-icon><CloseBold /></el-icon>
-                    清除选择
-                  </el-button>
-                </div>
               </div>
             </div>
           </el-upload>
@@ -466,12 +366,11 @@ onMounted(() => {
         <el-button
           type="primary"
           size="large"
-          :loading="isComparing"
           :disabled="!leftFile || !rightFile"
-          @click="startComparison"
+          @click="showContentSelector = true"
         >
-          <span v-if="!isComparing">开始比对</span>
-          <span v-else>比对中...</span>
+          <el-icon><Select /></el-icon>
+          选择内容
         </el-button>
 
         <el-button
@@ -487,7 +386,17 @@ onMounted(() => {
     <!-- 差异展示区域 -->
     <div v-if="showDiffViewer" class="diff-viewer-container">
       <div class="diff-header">
-        <h2>差异比对结果</h2>
+        <div class="header-left">
+          <el-button
+            size="small"
+            @click="backToContentSelector"
+            class="back-btn"
+          >
+            <el-icon><ArrowLeft /></el-icon>
+            返回
+          </el-button>
+          <h2>差异比对结果</h2>
+        </div>
       </div>
       <DiffViewer
         ref="diffViewerRef"
@@ -498,33 +407,71 @@ onMounted(() => {
       />
     </div>
 
-    <!-- 内容选择器对话框 -->
-    <el-dialog
-      v-model="showContentSelector"
-      :title="`选择${currentSide === 'left' ? '基准文件' : '比对文件'}内容`"
-      width="80%"
-      :close-on-click-modal="false"
-      class="content-selector-dialog"
-    >
-      <FileContentSelector
-        v-if="currentSide && (currentSide === 'left' ? leftFile : rightFile)"
-        :file-path="currentSide === 'left' ? leftFile?.path : rightFile?.path"
-        :model-value="currentSide === 'left' ? leftSelectedContent : rightSelectedContent"
-        @update:model-value="handleContentSelected"
-        @text-selected="handleContentSelected"
-      />
+    <!-- 内容选择器（页面内展开，左右分屏） -->
+    <div v-if="showContentSelector" class="content-selector-inline">
+      <div class="content-selector-header">
+        <div class="header-left">
+          <el-button
+            size="small"
+            @click="showContentSelector = false"
+            class="back-btn"
+          >
+            <el-icon><ArrowLeft /></el-icon>
+            返回
+          </el-button>
+          <h3>选择比对内容</h3>
+        </div>
+        <div class="header-actions">
+          <el-button
+            type="primary"
+            :loading="isComparing"
+            @click="startComparison"
+          >
+            <el-icon><Select /></el-icon>
+            <span v-if="!isComparing">开始比对</span>
+            <span v-else>比对中...</span>
+          </el-button>
+        </div>
+      </div>
+      <div class="content-selector-body">
+        <!-- 左侧文件内容选择 -->
+        <div class="selector-panel left">
+          <div class="panel-header">
+            <h4>{{ leftFile?.name }} (基准文件)</h4>
+            <el-tag v-if="leftSelectedContent" type="success" size="small">
+              已选择 {{ leftSelectedContent.length }} 字符
+            </el-tag>
+          </div>
+          <FileContentSelector
+            v-if="leftFile"
+            :file-path="leftFile.path"
+            :model-value="leftSelectedContent"
+            @update:model-value="handleLeftContentSelected"
+            @text-selected="handleLeftContentSelected"
+          />
+        </div>
 
-      <template #footer>
-        <el-button @click="showContentSelector = false">取消</el-button>
-        <el-button
-          type="primary"
-          @click="confirmContentSelection"
-          :disabled="!currentSide || !(currentSide === 'left' ? leftSelectedContent : rightSelectedContent)"
-        >
-          确认选择
-        </el-button>
-      </template>
-    </el-dialog>
+        <!-- 分隔线 -->
+        <div class="panel-divider"></div>
+
+        <!-- 右侧文件内容选择 -->
+        <div class="selector-panel right">
+          <div class="panel-header">
+            <h4>{{ rightFile?.name }} (比对文件)</h4>
+            <el-tag v-if="rightSelectedContent" type="success" size="small">
+              已选择 {{ rightSelectedContent.length }} 字符
+            </el-tag>
+          </div>
+          <FileContentSelector
+            v-if="rightFile"
+            :file-path="rightFile.path"
+            :model-value="rightSelectedContent"
+            @update:model-value="handleRightContentSelected"
+            @text-selected="handleRightContentSelected"
+          />
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -535,23 +482,8 @@ onMounted(() => {
   padding: 20px;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: 40px;
-
-  h1 {
-    color: #2c3e50;
-    margin-bottom: 10px;
-  }
-
-  p {
-    color: #7f8c8d;
-    font-size: 16px;
-  }
-}
-
 .upload-container {
-  margin-top: 40px;
+  margin-top: 10px;
 }
 
 .upload-area {
@@ -630,19 +562,28 @@ onMounted(() => {
 
 .diff-viewer-container {
   margin-top: 20px;
-  width: calc(100vw - 40px); /* 铺满屏幕宽度，减去页面padding */
-  margin-left: -20px; /* 抵消父容器的padding */
-  margin-right: -20px; /* 抵消父容器的padding */
-  padding: 0 20px; /* 重新添加内边距 */
 
   .diff-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 1px solid #e4e7ed;
 
-    h2 {
-      margin: 0;
-      color: #2c3e50;
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .back-btn {
+        padding: 6px 12px;
+      }
+
+      h2 {
+        margin: 0;
+        color: #2c3e50;
+      }
     }
   }
 }
@@ -687,11 +628,102 @@ onMounted(() => {
   }
 }
 
-.content-selector-dialog {
-  :deep(.el-dialog__body) {
-    padding: 10px 20px;
-    max-height: 70vh;
-    overflow-y: auto;
+/* 内容选择器页面内展开样式 - 左右分屏 */
+.content-selector-inline {
+  margin-top: 30px;
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  .content-selector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e4e7ed;
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .back-btn {
+        padding: 6px 12px;
+      }
+
+      h3 {
+        margin: 0;
+        color: #2c3e50;
+        font-size: 20px;
+        font-weight: 600;
+      }
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+  }
+
+  .content-selector-body {
+    display: flex;
+    gap: 20px;
+    height: 600px;
+
+    .selector-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #e4e7ed;
+      border-radius: 8px;
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid #e4e7ed;
+        background: #f8f9fa;
+        flex-shrink: 0;
+
+        h4 {
+          margin: 0;
+          color: #2c3e50;
+          font-size: 16px;
+          font-weight: 600;
+        }
+      }
+
+      :deep(.file-content-selector) {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        margin-bottom: 0;
+
+        .content-card {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border: none;
+          box-shadow: none;
+        }
+
+        .content-container {
+          flex: 1;
+          overflow-y: auto;
+        }
+
+        .chapter-list {
+          flex: 1;
+          overflow-y: auto;
+        }
+      }
+    }
   }
 }
 </style>

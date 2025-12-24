@@ -41,15 +41,15 @@ body {
 }
 
 :deep(.el-button--primary) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
   border: none;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(65, 127, 242, 0.3);
 }
 
 :deep(.el-button--primary:hover) {
-  background: linear-gradient(135deg, #5a6fc1 0%, #6b4a90 100%);
+  background: linear-gradient(135deg, #2D5FD8 0%, #1A4BC2 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(65, 127, 242, 0.4);
 }
 
 :deep(.el-card) {
@@ -78,7 +78,7 @@ body {
 }
 
 :deep(.el-dialog__header) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
   color: white;
   padding: 20px 24px;
 }
@@ -128,7 +128,7 @@ body {
 }
 
 :deep(.el-pagination .el-pager li.active) {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
 }
 
 :deep(.el-tag) {
@@ -191,12 +191,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #417FF2 0%, #2D5FD8 100%);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #5a6fc1 0%, #6b4a90 100%);
+  background: linear-gradient(135deg, #2D5FD8 0%, #1A4BC2 100%);
 }
 
 /* 动画效果 */

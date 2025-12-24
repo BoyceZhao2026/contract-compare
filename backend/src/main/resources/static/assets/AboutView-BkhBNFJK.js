@@ -1,1 +1,0 @@
-import{_ as s,g as t,i as o,p as a}from"./index-BaIfRFaL.js";const n={},r={class:"about"};function c(i,e){return a(),t("div",r,[...e[0]||(e[0]=[o("h1",null,"This is an about page",-1)])])}const l=s(n,[["render",c]]);export{l as default};
