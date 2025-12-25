@@ -344,14 +344,16 @@ onMounted(() => {
 
 <style scoped>
 .history-tab {
-  max-width: 1600px;
-  margin: 0 auto;
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* 搜索区域 */
 .search-section {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .search-container {
@@ -359,6 +361,8 @@ onMounted(() => {
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-form {
@@ -390,12 +394,14 @@ onMounted(() => {
 /* 历史记录部分 */
 .history-section {
   margin-bottom: 20px;
+  width: 100%;
 }
 
 .history-card {
   border: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-radius: 12px;
+  width: 100%;
 }
 
 .card-header {
@@ -422,7 +428,6 @@ onMounted(() => {
 
 .history-list {
   padding: 24px;
-  min-height: 400px;
 }
 
 .history-item {

@@ -5,8 +5,10 @@ import NavBar from './components/NavBar.vue'
 
 <template>
   <div id="app">
-    <NavBar />
-    <RouterView />
+    <div class="app-container">
+      <NavBar />
+      <RouterView />
+    </div>
   </div>
 </template>
 
@@ -24,6 +26,8 @@ body {
   color: #2c3e50;
   line-height: 1.6;
   min-height: 100vh;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 #app {
@@ -31,6 +35,15 @@ body {
   padding: 0;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
+.app-container {
+  max-width: 1460px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* 全局Element Plus样式优化 */

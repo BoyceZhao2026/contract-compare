@@ -30,13 +30,11 @@ const activeIndex = computed(() => route.path)
 }
 
 .navbar-content {
-  max-width: 1400px;
-  margin: 0 auto;
+  padding: 0 20px;
+  height: 64px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-  height: 64px;
 }
 
 .navbar-brand {

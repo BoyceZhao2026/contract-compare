@@ -400,7 +400,7 @@ watch(() => route.query, () => {
             <el-icon><ArrowLeft /></el-icon>
             返回
           </el-button>
-          <h2>差异比对结果</h2>
+          <h3>差异比对结果</h3>
         </div>
       </div>
       <DiffViewer
@@ -482,9 +482,9 @@ watch(() => route.query, () => {
 
 <style scoped lang="scss">
 .contract-compare {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 20px;
+
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .upload-container {
@@ -567,13 +567,16 @@ watch(() => route.query, () => {
 
 .diff-viewer-container {
   margin-top: 20px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 
   .diff-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 10px;
+    padding: 16px 20px;
     border-bottom: 1px solid #e4e7ed;
 
     .header-left {
@@ -588,6 +591,8 @@ watch(() => route.query, () => {
       h2 {
         margin: 0;
         color: #2c3e50;
+        font-size: 20px;
+        font-weight: 600;
       }
     }
   }

@@ -41,16 +41,26 @@ watch(activeTab, (newTab) => {
 
 <style scoped>
 .home-view {
-  width: 100%;
+  padding: 0;
+  overflow: hidden;
 }
 
 .home-tabs {
   width: 100%;
 }
 
+:deep(.el-tabs__content) {
+  width: 100%;
+  overflow: hidden;
+}
+
+:deep(.el-tab-pane) {
+  width: 100%;
+}
+
 :deep(.el-tabs__header) {
   margin: 0 0 20px 0;
-  padding: 0 20px;
+  padding: 0;
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -58,6 +68,10 @@ watch(activeTab, (newTab) => {
 
 :deep(.el-tabs__nav-wrap::after) {
   display: none;
+}
+
+:deep(.el-tabs__nav-wrap) {
+  padding: 0 20px;
 }
 
 :deep(.el-tabs__item) {
