@@ -588,7 +588,7 @@ watch(() => route.query, () => {
         padding: 6px 12px;
       }
 
-      h2 {
+      h3 {
         margin: 0;
         color: #2c3e50;
         font-size: 20px;
