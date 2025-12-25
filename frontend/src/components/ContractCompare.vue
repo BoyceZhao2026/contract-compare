@@ -482,7 +482,7 @@ watch(() => route.query, () => {
 
 <style scoped lang="scss">
 .contract-compare {
-
+  padding: 0;
   width: 100%;
   box-sizing: border-box;
 }
@@ -566,9 +566,9 @@ watch(() => route.query, () => {
 }
 
 .diff-viewer-container {
-  margin-top: 20px;
+  margin-top: 10px;
   background: white;
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
@@ -640,10 +640,10 @@ watch(() => route.query, () => {
 
 /* 内容选择器页面内展开样式 - 左右分屏 */
 .content-selector-inline {
-  margin-top: 30px;
+  margin-top: 2px;
   padding: 24px;
   background: white;
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 
   .content-selector-header {
@@ -688,7 +688,7 @@ watch(() => route.query, () => {
       flex-direction: column;
       overflow: hidden;
       border: 1px solid #e4e7ed;
-      border-radius: 8px;
+      border-radius: 0;
 
       .panel-header {
         display: flex;

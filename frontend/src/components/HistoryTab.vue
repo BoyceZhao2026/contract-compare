@@ -344,7 +344,7 @@ onMounted(() => {
 
 <style scoped>
 .history-tab {
-  padding: 20px;
+  padding: 0;
   width: 100%;
   box-sizing: border-box;
   overflow-x: hidden;
@@ -358,7 +358,7 @@ onMounted(() => {
 
 .search-container {
   background: white;
-  border-radius: 12px;
+  border-radius: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 24px;
   width: 100%;
@@ -400,7 +400,7 @@ onMounted(() => {
 .history-card {
   border: none;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 12px;
+  border-radius: 0;
   width: 100%;
 }
 
@@ -433,7 +433,7 @@ onMounted(() => {
 .history-item {
   background: #f8f9fa;
   border: 1px solid #e9ecef;
-  border-radius: 12px;
+  border-radius: 0;
   padding: 20px;
   margin-bottom: 16px;
   cursor: pointer;

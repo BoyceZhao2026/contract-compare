@@ -60,18 +60,14 @@ watch(activeTab, (newTab) => {
 
 :deep(.el-tabs__header) {
   margin: 0 0 20px 0;
-  padding: 0;
+  padding: 0 20px;
   background: white;
-  border-radius: 8px;
+  border-radius: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 :deep(.el-tabs__nav-wrap::after) {
   display: none;
-}
-
-:deep(.el-tabs__nav-wrap) {
-  padding: 0 20px;
 }
 
 :deep(.el-tabs__item) {
