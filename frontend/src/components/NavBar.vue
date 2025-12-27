@@ -3,7 +3,7 @@
     <div class="navbar-content">
       <div class="navbar-brand">
         <el-icon class="brand-icon"><Document /></el-icon>
-        <span class="brand-text">合同模板对比</span>
+        <span class="brand-text">合同模板对比（内测体验版）</span>
       </div>
 
     </div>
